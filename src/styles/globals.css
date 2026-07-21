@@ -1,0 +1,22 @@
+@import url("https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+:root {
+	/* CrisisCleanup-inspired dark theme */
+	--cc-bg: #151515;
+	--cc-panel: #1f1c18;
+	--cc-hover: #262320;
+	--cc-border: #35312b;
+	--cc-text: #f5f3ef;
+	--cc-text-dim: #b8b3a8;
+	--cc-text-muted: #837c6f;
+	--cc-accent: #fece09;
+	--cc-accent-2: #f79820;
+}
+
+body {
+	font-family: "Public Sans", sans-serif;
+	font-weight: normal;
+	background-color: var(--cc-bg);
+	color: var(--cc-text);
+}
