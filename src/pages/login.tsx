@@ -1,14 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import {
-	TextInput,
-	PasswordInput,
-	Button,
-	Text,
-	Stack,
-	Alert
-} from "@mantine/core";
-import { IconShieldHalf, IconAlertCircle } from "@tabler/icons-react";
+import { Card, Input, Button, Alert } from "@kaistrum/stratum-ui";
+import { IconShieldHalf, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
@@ -16,6 +9,7 @@ export default function LoginPage() {
 	const router = useRouter();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+	const [showPassword, setShowPassword] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 
@@ -33,124 +27,58 @@ export default function LoginPage() {
 	};
 
 	return (
-		<div
-			style={{
-				minHeight: "100dvh",
-				background: "var(--cc-bg)",
-				display: "flex",
-				flexDirection: "column"
-			}}>
+		<div className="flex min-h-[100dvh] flex-col bg-bg">
 			{/* Top bar */}
-			<div
-				style={{
-					height: 64,
-					flexShrink: 0,
-					borderBottom: "1px solid var(--cc-border)",
-					display: "flex",
-					alignItems: "center",
-					gap: 10,
-					padding: "0 20px"
-				}}>
-				<div
-					style={{
-						width: 32,
-						height: 32,
-						background: "var(--cc-accent)",
-						borderRadius: "50%",
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-						flexShrink: 0
-					}}>
-					<IconShieldHalf size={18} color="#151515" />
+			<div className="flex h-16 flex-shrink-0 items-center gap-2.5 border-b border-border px-5">
+				<div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent">
+					<IconShieldHalf size={18} className="text-text-on-accent" />
 				</div>
-				<Text fw={700} size="md" style={{ fontFamily: "'Big Shoulders Display', sans-serif" }}>
-					Crisis Responders
-				</Text>
+				<span className="font-semibold text-text">Crisis Responders</span>
 			</div>
 
 			{/* Centered card */}
-			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					padding: "24px 16px"
-				}}>
-				<div
-					style={{
-						width: "100%",
-						maxWidth: 380,
-						background: "var(--cc-panel)",
-						border: "1px solid var(--cc-border)",
-						borderRadius: 16,
-						padding: "36px 28px"
-					}}>
-					<Text
-						fw={700}
-						size="xl"
-						ta="center"
-						mb={6}
-						style={{ fontFamily: "'Big Shoulders Display', sans-serif" }}>
-						Welcome back
-					</Text>
-					<Text size="sm" c="dimmed" ta="center" mb={28}>
+			<div className="flex flex-1 items-center justify-center px-4 py-6">
+				<Card surface="card" padding="spacious" className="w-full max-w-[380px]">
+					<h1 className="mb-1.5 text-center text-2xl font-semibold text-text">Welcome back</h1>
+					<p className="mb-7 text-center text-sm text-text-dim">
 						Sign in to your account to continue
-					</Text>
+					</p>
 
-					<form onSubmit={handleSubmit}>
-						<Stack gap={14}>
-							{error && (
-								<Alert
-									icon={<IconAlertCircle size={16} />}
-									color="red"
-									variant="light"
-									radius="md">
-									{error}
-								</Alert>
-							)}
+					<form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+						{error && <Alert variant="danger">{error}</Alert>}
 
-							<TextInput
-								label="Email"
-								placeholder="you@nairobi.go.ke"
-								value={email}
-								onChange={e => setEmail(e.currentTarget.value)}
-								radius="md"
-								required
-								styles={{
-									input: { background: "var(--cc-bg)", borderColor: "var(--cc-border)", color: "var(--cc-text)" },
-									label: { fontWeight: 500, marginBottom: 4 }
-								}}
-							/>
+						<Input
+							label="Email"
+							type="email"
+							placeholder="you@example.com"
+							value={email}
+							onChange={e => setEmail(e.currentTarget.value)}
+							required
+						/>
 
-							<PasswordInput
-								label="Password"
-								placeholder="••••••••"
-								value={password}
-								onChange={e => setPassword(e.currentTarget.value)}
-								radius="md"
-								required
-								styles={{
-									input: { background: "var(--cc-bg)", borderColor: "var(--cc-border)", color: "var(--cc-text)" },
-									label: { fontWeight: 500, marginBottom: 4 }
-								}}
-							/>
+						<Input
+							label="Password"
+							type={showPassword ? "text" : "password"}
+							placeholder="••••••••"
+							value={password}
+							onChange={e => setPassword(e.currentTarget.value)}
+							required
+							trailingIcon={
+								<button
+									type="button"
+									onClick={() => setShowPassword(s => !s)}
+									className="text-text-muted transition-colors hover:text-text"
+									aria-label={showPassword ? "Hide password" : "Show password"}>
+									{showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+								</button>
+							}
+						/>
 
-							<Button
-								type="submit"
-								color="gold"
-								radius="xl"
-								size="md"
-								fullWidth
-								loading={loading}
-								mt={8}>
-								Sign In
-							</Button>
-						</Stack>
+						<Button type="submit" variant="primary" fullWidth loading={loading} className="mt-2">
+							Sign In
+						</Button>
 					</form>
-
-				</div>
+				</Card>
 			</div>
 		</div>
 	);

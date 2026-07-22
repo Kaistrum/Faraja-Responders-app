@@ -1,24 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/router";
-import {
-	Text,
-	Badge,
-	Stack,
-	Group,
-	ScrollArea,
-	Loader,
-	SegmentedControl,
-	Select,
-	Alert
-} from "@mantine/core";
-import {
-	IconMapPin,
-	IconClock,
-	IconChevronRight,
-	IconCircleCheck,
-	IconAlertCircle,
-	IconArrowsSort
-} from "@tabler/icons-react";
+import { Badge, Select, Alert, Spinner } from "@kaistrum/stratum-ui";
+import { IconMapPin, IconClock, IconChevronRight, IconCircleCheck } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 import { CrisisReport } from "@/types";
 import { label } from "@/lib/api";
@@ -28,16 +11,20 @@ import { haversineKm } from "@/utils/routing";
 import ReportDetailDrawer from "@/components/ReportDetailDrawer";
 import TopNav from "@/components/TopNav";
 
-function formatDistance(km: number): string {
-	if (km < 1) return `${Math.round(km * 1000)} m away`;
-	return `${km.toFixed(1)} km away`;
-}
+type BadgeVariant = "accent" | "info" | "success" | "warning" | "danger" | "neutral" | "outline";
 
-const URGENCY_COLORS: Record<string, string> = {
-	critical: "red",
-	high: "orange",
-	medium: "yellow",
-	low: "green"
+const URGENCY_VARIANT: Record<string, BadgeVariant> = {
+	critical: "danger",
+	high: "warning",
+	medium: "info",
+	low: "success"
+};
+
+const URGENCY_DOT: Record<string, string> = {
+	critical: "var(--danger)",
+	high: "var(--warning)",
+	medium: "var(--info)",
+	low: "var(--success)"
 };
 
 function formatRelative(iso: string) {
@@ -50,9 +37,20 @@ function formatRelative(iso: string) {
 	return `${m}m ago`;
 }
 
+function formatDistance(km: number): string {
+	if (km < 1) return `${Math.round(km * 1000)} m away`;
+	return `${km.toFixed(1)} km away`;
+}
+
 type StatusFilter = "all" | "assigned" | "attended";
 type DamageFilter = "all" | "minimal" | "partial" | "complete";
 type SortOrder = "newest" | "oldest";
+
+const STATUS_TABS: { label: string; value: StatusFilter }[] = [
+	{ label: "All", value: "all" },
+	{ label: "Active", value: "assigned" },
+	{ label: "Attended", value: "attended" }
+];
 
 export default function ReportsPage() {
 	const { responder, isLoading } = useAuth();
@@ -68,7 +66,7 @@ export default function ReportsPage() {
 		if (!isLoading && !responder) router.replace("/login");
 	}, [responder, isLoading, router]);
 
-	const handleNavigate = useCallback((_report: CrisisReport) => {
+	const handleNavigate = useCallback(() => {
 		router.push("/map");
 	}, [router]);
 
@@ -84,230 +82,135 @@ export default function ReportsPage() {
 
 	if (isLoading || !responder) {
 		return (
-			<div
-				style={{
-					height: "100dvh",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					background: "var(--cc-bg)"
-				}}>
-				<Loader color="gold" />
+			<div className="flex h-[100dvh] items-center justify-center bg-bg">
+				<Spinner size={28} />
 			</div>
 		);
 	}
 
 	return (
-		<div
-			style={{
-				height: "100dvh",
-				display: "flex",
-				flexDirection: "column",
-				background: "var(--cc-bg)",
-				paddingTop: 64
-			}}>
+		<div className="flex h-[100dvh] flex-col bg-bg pt-16">
 			<TopNav />
 
 			{/* Header */}
-			<div
-				style={{
-					padding: "16px 16px 12px",
-					borderBottom: "1px solid var(--cc-border)",
-					background: "var(--cc-bg)",
-					flexShrink: 0
-				}}>
-				<Text fw={700} size="lg" mb={12} style={{ fontFamily: "'Big Shoulders Display', sans-serif" }}>
-					Assigned Reports
-				</Text>
-				<SegmentedControl
-					fullWidth
-					size="xs"
-					radius="xl"
-					color="gold"
-					value={statusFilter}
-					onChange={v => setStatusFilter(v as StatusFilter)}
-					data={[
-						{ label: "All", value: "all" },
-						{ label: "Active", value: "assigned" },
-						{ label: "Attended", value: "attended" }
-					]}
-					styles={{
-						root: { background: "var(--cc-panel)" }
-					}}
-				/>
-				<Group gap={8} mt={10} wrap="nowrap">
+			<div className="flex-shrink-0 border-b border-border px-4 pt-4 pb-3">
+				<h1 className="mb-3 text-lg font-bold text-text">Assigned Reports</h1>
+
+				{/* Status segmented control */}
+				<div className="flex gap-1 rounded-full bg-bg-card p-1">
+					{STATUS_TABS.map(tab => (
+						<button
+							key={tab.value}
+							onClick={() => setStatusFilter(tab.value)}
+							className={`flex-1 rounded-full py-1.5 text-xs font-medium transition-colors ${
+								statusFilter === tab.value
+									? "bg-accent text-text-on-accent"
+									: "text-text-dim hover:text-text"
+							}`}>
+							{tab.label}
+						</button>
+					))}
+				</div>
+
+				<div className="mt-2.5 flex gap-2">
 					<Select
-						size="xs"
-						radius="xl"
+						className="flex-1"
 						value={damageFilter}
-						onChange={v => setDamageFilter((v ?? "all") as DamageFilter)}
-						data={[
+						onChange={e => setDamageFilter(e.currentTarget.value as DamageFilter)}
+						options={[
 							{ value: "all", label: "All damage levels" },
 							{ value: "minimal", label: "Minimal" },
 							{ value: "partial", label: "Partial" },
 							{ value: "complete", label: "Complete" }
 						]}
-						style={{ flex: 1 }}
-						comboboxProps={{ withinPortal: true }}
-						styles={{
-							input: { background: "var(--cc-panel)", borderColor: "var(--cc-border)", color: "var(--cc-text)" }
-						}}
 					/>
 					<Select
-						size="xs"
-						radius="xl"
+						className="flex-1"
 						value={sortOrder}
-						onChange={v => setSortOrder((v ?? "newest") as SortOrder)}
-						leftSection={<IconArrowsSort size={13} />}
-						data={[
+						onChange={e => setSortOrder(e.currentTarget.value as SortOrder)}
+						options={[
 							{ value: "newest", label: "Newest first" },
 							{ value: "oldest", label: "Oldest first" }
 						]}
-						style={{ flex: 1 }}
-						comboboxProps={{ withinPortal: true }}
-						styles={{
-							input: { background: "var(--cc-panel)", borderColor: "var(--cc-border)", color: "var(--cc-text)" }
-						}}
 					/>
-				</Group>
+				</div>
 			</div>
 
 			{/* List */}
-			<ScrollArea style={{ flex: 1 }}>
-				<Stack gap={0} px={16} pt={12} pb={24}>
-					{error && (
-						<Alert
-							icon={<IconAlertCircle size={16} />}
-							color="red"
-							variant="light"
-							radius="md"
-							mb={10}>
-							{error}
-						</Alert>
-					)}
-					{!error && failedCount > 0 && (
-						<Alert
-							icon={<IconAlertCircle size={16} />}
-							color="yellow"
-							variant="light"
-							radius="md"
-							mb={10}>
-							{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
-						</Alert>
-					)}
-					{loading && (
-						<Group justify="center" py={40}>
-							<Loader color="gold" size="sm" />
-						</Group>
-					)}
-					{!loading && !error && visible.length === 0 && (
-						<Text size="sm" c="dimmed" ta="center" py={40}>
-							{reports.length === 0 ? "No assignments yet" : "No reports match these filters"}
-						</Text>
-					)}
+			<div className="flex-1 overflow-y-auto px-4 pt-3 pb-6">
+				{error && (
+					<Alert variant="danger" className="mb-2.5">
+						{error}
+					</Alert>
+				)}
+				{!error && failedCount > 0 && (
+					<Alert variant="warning" className="mb-2.5">
+						{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
+					</Alert>
+				)}
+				{loading && (
+					<div className="flex justify-center py-10">
+						<Spinner size={22} />
+					</div>
+				)}
+				{!loading && !error && visible.length === 0 && (
+					<p className="py-10 text-center text-sm text-text-dim">
+						{reports.length === 0 ? "No assignments yet" : "No reports match these filters"}
+					</p>
+				)}
+
+				<div className="flex flex-col gap-2.5">
 					{visible.map(report => (
 						<button
 							key={report.id}
 							onClick={() => setSelectedReport(report)}
-							style={{
-								width: "100%",
-								background: "var(--cc-panel)",
-								border: "1px solid var(--cc-border)",
-								borderRadius: 12,
-								padding: "14px 12px",
-								marginBottom: 10,
-								cursor: "pointer",
-								textAlign: "left",
-								display: "flex",
-								alignItems: "flex-start",
-								gap: 12
-							}}>
-							{/* Urgency dot */}
-							<div
+							className="flex items-start gap-3 rounded-xl border border-border bg-bg-card p-3 text-left transition-colors hover:border-border-strong">
+							<span
+								className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
 								style={{
-									width: 10,
-									height: 10,
-									borderRadius: "50%",
 									background:
-										report.status === "attended"
-											? "var(--cc-text-muted)"
-											: ({
-													critical: "#ef4444",
-													high: "#f97316",
-													medium: "#eab308",
-													low: "#22c55e"
-												}[report.urgency] ?? "#9ca3af"),
-									marginTop: 4,
-									flexShrink: 0
+										report.status === "attended" ? "var(--text-muted)" : URGENCY_DOT[report.urgency] ?? "var(--text-muted)"
 								}}
 							/>
-
-							<div style={{ flex: 1, minWidth: 0 }}>
-								<Group justify="space-between" mb={4} wrap="nowrap">
-									<Text
-										fw={600}
-										size="sm"
-										style={{
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap",
-											flex: 1
-										}}>
+							<div className="min-w-0 flex-1">
+								<div className="mb-1 flex items-center justify-between gap-2">
+									<span className="flex-1 truncate text-sm font-semibold text-text">
 										{report.title}
-									</Text>
-									<Group gap={4} style={{ flexShrink: 0 }}>
+									</span>
+									<span className="flex shrink-0 items-center gap-1">
 										{report.damageLevel && (
-											<Badge color="gray" variant="outline" size="xs">
-												{label(report.damageLevel)}
-											</Badge>
+											<Badge variant="outline">{label(report.damageLevel)}</Badge>
 										)}
-										<Badge
-											color={URGENCY_COLORS[report.urgency]}
-											variant="light"
-											size="xs">
+										<Badge variant={URGENCY_VARIANT[report.urgency] ?? "neutral"}>
 											{report.priority}
 										</Badge>
 										{report.status === "attended" && (
-											<IconCircleCheck size={14} color="#22c55e" />
+											<IconCircleCheck size={14} className="text-success" />
 										)}
-									</Group>
-								</Group>
-
-								<Group gap={4} mb={2}>
-									<IconMapPin size={12} color="var(--cc-text-muted)" />
-									<Text
-										size="xs"
-										c="dimmed"
-										style={{
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap"
-										}}>
-										{report.address}
-									</Text>
-								</Group>
-
-								<Group gap={4} wrap="nowrap">
-									<IconClock size={12} color="var(--cc-text-muted)" />
-									<Text size="xs" c="dimmed">
-										{formatRelative(report.reportedAt)}
-									</Text>
+									</span>
+								</div>
+								<div className="mb-0.5 flex items-center gap-1 text-text-dim">
+									<IconMapPin size={12} className="text-text-muted" />
+									<span className="truncate text-xs">{report.address}</span>
+								</div>
+								<div className="flex items-center gap-1 text-text-dim">
+									<IconClock size={12} className="text-text-muted" />
+									<span className="text-xs">{formatRelative(report.reportedAt)}</span>
 									{userPos && (
 										<>
-											<Text size="xs" c="dimmed">·</Text>
-											<Text size="xs" c="dimmed">
+											<span className="text-xs">·</span>
+											<span className="text-xs">
 												{formatDistance(haversineKm(userPos, [report.location.lat, report.location.lng]))}
-											</Text>
+											</span>
 										</>
 									)}
-								</Group>
+								</div>
 							</div>
-
-							<IconChevronRight size={16} color="var(--cc-text-muted)" style={{ marginTop: 2, flexShrink: 0 }} />
+							<IconChevronRight size={16} className="mt-0.5 shrink-0 text-text-muted" />
 						</button>
 					))}
-				</Stack>
-			</ScrollArea>
+				</div>
+			</div>
 
 			<ReportDetailDrawer
 				report={selectedReport}

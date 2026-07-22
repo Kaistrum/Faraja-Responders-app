@@ -12,42 +12,18 @@ export default function TopNav() {
 	const router = useRouter();
 
 	return (
-		<nav
-			style={{
-				position: "fixed",
-				top: 0,
-				left: 0,
-				right: 0,
-				height: 64,
-				background: "var(--cc-panel)",
-				borderBottom: "1px solid var(--cc-border)",
-				display: "flex",
-				alignItems: "stretch",
-				zIndex: 1000
-			}}>
+		<nav className="fixed inset-x-0 top-0 z-[1000] flex h-16 items-stretch border-b border-border bg-nav-bg backdrop-blur">
 			{NAV_ITEMS.map(({ label, icon: Icon, href }) => {
 				const active = router.pathname === href;
 				return (
 					<button
 						key={href}
 						onClick={() => router.push(href)}
-						style={{
-							flex: 1,
-							display: "flex",
-							flexDirection: "column",
-							alignItems: "center",
-							justifyContent: "center",
-							gap: 4,
-							background: "none",
-							border: "none",
-							borderBottom: active ? "2.5px solid var(--cc-accent)" : "2.5px solid transparent",
-							cursor: "pointer",
-							color: active ? "var(--cc-accent)" : "var(--cc-text-muted)",
-							fontFamily: "'Public Sans', sans-serif",
-							fontSize: 11,
-							fontWeight: active ? 600 : 400,
-							transition: "color 0.15s, border-color 0.15s"
-						}}>
+						className={`flex flex-1 flex-col items-center justify-center gap-1 border-b-2 text-[11px] font-medium transition-colors duration-200 ${
+							active
+								? "border-accent text-accent"
+								: "border-transparent text-text-muted hover:text-text"
+						}`}>
 						<Icon size={22} stroke={active ? 2 : 1.5} />
 						{label}
 					</button>

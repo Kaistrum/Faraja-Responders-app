@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
-import { Loader } from "@mantine/core";
+import { Spinner } from "@kaistrum/stratum-ui";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Home() {
@@ -13,15 +13,8 @@ export default function Home() {
 	}, [responder, isLoading, router]);
 
 	return (
-		<div
-			style={{
-				height: "100dvh",
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: "#f0eee6"
-			}}>
-			<Loader color="dark" />
+		<div className="flex h-[100dvh] items-center justify-center bg-bg">
+			<Spinner size={28} />
 		</div>
 	);
 }

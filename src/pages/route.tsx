@@ -1,28 +1,13 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
-import {
-	Text,
-	Badge,
-	Loader,
-	ScrollArea,
-	Stack,
-	Group,
-	Checkbox,
-	Button,
-	Alert,
-	CopyButton,
-	Modal,
-	ActionIcon
-} from "@mantine/core";
+import { Badge, Spinner, Checkbox, Button, Alert, Modal } from "@kaistrum/stratum-ui";
 import {
 	IconMapPin,
-	IconAlertCircle,
 	IconExternalLink,
 	IconCopy,
 	IconCheck,
-	IconQrcode,
-	IconX
+	IconQrcode
 } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 import { CrisisReport } from "@/types";
@@ -34,24 +19,19 @@ import TopNav from "@/components/TopNav";
 const ResponderMap = dynamic(() => import("@/components/ResponderMap"), {
 	ssr: false,
 	loading: () => (
-		<div
-			style={{
-				height: "100%",
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: "var(--cc-panel)"
-			}}>
-			<Loader color="gold" size="sm" />
+		<div className="flex h-full items-center justify-center bg-bg-card">
+			<Spinner size={22} />
 		</div>
 	)
 });
 
-const URGENCY_COLORS: Record<string, string> = {
-	critical: "red",
-	high: "orange",
-	medium: "yellow",
-	low: "green"
+type BadgeVariant = "accent" | "info" | "success" | "warning" | "danger" | "neutral" | "outline";
+
+const URGENCY_VARIANT: Record<string, BadgeVariant> = {
+	critical: "danger",
+	high: "warning",
+	medium: "info",
+	low: "success"
 };
 
 function QrCanvas({ url }: { url: string }) {
@@ -69,19 +49,39 @@ function QrCanvas({ url }: { url: string }) {
 	}, [url]);
 
 	return (
-		<Stack gap={6} align="center">
+		<div className="flex flex-col items-center gap-1.5">
 			<canvas
 				ref={ref}
 				width={240}
 				height={240}
-				style={{ width: 240, height: 240, borderRadius: 8, background: "#fff", display: err ? "none" : "block" }}
+				className="rounded-lg bg-white"
+				style={{ width: 240, height: 240, display: err ? "none" : "block" }}
 			/>
-			{err && (
-				<Text size="xs" c="red" ta="center">
-					{err}
-				</Text>
-			)}
-		</Stack>
+			{err && <p className="text-center text-xs text-danger">{err}</p>}
+		</div>
+	);
+}
+
+function CopyLinkButton({ url }: { url: string }) {
+	const [copied, setCopied] = useState(false);
+	const copy = async () => {
+		try {
+			await navigator.clipboard.writeText(url);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1500);
+		} catch {
+			/* clipboard unavailable — no-op */
+		}
+	};
+	return (
+		<Button
+			variant="outline"
+			size="sm"
+			className="flex-1"
+			icon={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+			onClick={copy}>
+			{copied ? "Copied" : "Copy"}
+		</Button>
 	);
 }
 
@@ -97,12 +97,8 @@ export default function RoutePage() {
 		if (!isLoading && !responder) router.replace("/login");
 	}, [responder, isLoading, router]);
 
-	const activeReports = useMemo(
-		() => reports.filter(r => r.status === "assigned"),
-		[reports]
-	);
+	const activeReports = useMemo(() => reports.filter(r => r.status === "assigned"), [reports]);
 
-	// Drop any selected ids that are no longer active (e.g. after polling).
 	useEffect(() => {
 		setSelectedIds(prev => {
 			const activeIdSet = new Set(activeReports.map(r => r.id));
@@ -144,52 +140,34 @@ export default function RoutePage() {
 
 	if (isLoading || !responder) {
 		return (
-			<div
-				style={{
-					height: "100dvh",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					background: "var(--cc-bg)"
-				}}>
-				<Loader color="gold" />
+			<div className="flex h-[100dvh] items-center justify-center bg-bg">
+				<Spinner size={28} />
 			</div>
 		);
 	}
 
-	const navTarget = optimized && optimized.order.length > 0
-		? { report: optimized.order[0], route: optimized.route }
-		: null;
+	const navTarget =
+		optimized && optimized.order.length > 0
+			? { report: optimized.order[0], route: optimized.route }
+			: null;
 
 	return (
-		<div style={{ height: "100dvh", display: "flex", flexDirection: "column", paddingTop: 64 }}>
+		<div className="flex h-[100dvh] flex-col bg-bg pt-16">
 			<TopNav />
 
 			{/* Header */}
-			<div
-				style={{
-					minHeight: 52,
-					background: "var(--cc-bg)",
-					borderBottom: "1px solid var(--cc-border)",
-					display: "flex",
-					alignItems: "center",
-					padding: "8px 16px",
-					gap: 8,
-					flexShrink: 0,
-					zIndex: 20
-				}}>
-				<Text fw={700} size="sm" style={{ flex: 1, fontFamily: "'Big Shoulders Display', sans-serif" }}>
-					Optimized Route
-				</Text>
+			<div className="z-20 flex min-h-[52px] flex-shrink-0 items-center gap-2 border-b border-border bg-bg px-4 py-2">
+				<h1 className="flex-1 text-sm font-bold text-text">Optimized Route</h1>
 				{optimized && (
-					<Badge color="gold" variant="filled" size="sm">
-						{optimized.order.length} stop{optimized.order.length === 1 ? "" : "s"} · {optimized.totalKm.toFixed(1)} km
+					<Badge variant="accent">
+						{optimized.order.length} stop{optimized.order.length === 1 ? "" : "s"} ·{" "}
+						{optimized.totalKm.toFixed(1)} km
 					</Badge>
 				)}
 			</div>
 
 			{/* Map */}
-			<div style={{ height: "40%", overflow: "hidden", position: "relative", flexShrink: 0 }}>
+			<div className="relative h-[40%] flex-shrink-0 overflow-hidden">
 				<ResponderMap
 					reports={optimized ? optimized.order : selectedStops}
 					onReportClick={() => {}}
@@ -199,215 +177,127 @@ export default function RoutePage() {
 			</div>
 
 			{/* Controls + list */}
-			<ScrollArea style={{ flex: 1 }}>
-				<Stack gap={0} px={16} pt={12} pb={24}>
-					{error && (
-						<Alert icon={<IconAlertCircle size={16} />} color="red" variant="light" radius="md" mb={10}>
-							{error}
-						</Alert>
-					)}
-					{!error && failedCount > 0 && (
-						<Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light" radius="md" mb={10}>
-							{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
-						</Alert>
-					)}
+			<div className="flex-1 overflow-y-auto px-4 pt-3 pb-6">
+				{error && (
+					<Alert variant="danger" className="mb-2.5">
+						{error}
+					</Alert>
+				)}
+				{!error && failedCount > 0 && (
+					<Alert variant="warning" className="mb-2.5">
+						{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
+					</Alert>
+				)}
 
-					{loading && (
-						<Group justify="center" py={30}>
-							<Loader color="gold" size="sm" />
-						</Group>
-					)}
+				{loading && (
+					<div className="flex justify-center py-8">
+						<Spinner size={22} />
+					</div>
+				)}
 
-					{!loading && !error && activeReports.length === 0 && (
-						<Text size="sm" c="dimmed" ta="center" py={30}>
-							No active assignments to route
-						</Text>
-					)}
+				{!loading && !error && activeReports.length === 0 && (
+					<p className="py-8 text-center text-sm text-text-dim">No active assignments to route</p>
+				)}
 
-					{!loading && activeReports.length > 0 && (
-						<>
-							<Group justify="space-between" mb={8}>
-								<Checkbox
-									label="Select all"
-									color="gold"
-									checked={allSelected}
-									indeterminate={selectedIds.size > 0 && !allSelected}
-									onChange={toggleAll}
-									styles={{ label: { fontWeight: 600, fontSize: 13 } }}
-								/>
-								<Text size="xs" c="dimmed">
-									{selectedIds.size} selected
-								</Text>
-							</Group>
+				{!loading && activeReports.length > 0 && (
+					<>
+						<div className="mb-2 flex items-center justify-between">
+							<Checkbox label="Select all" checked={allSelected} onChange={toggleAll} />
+							<span className="text-xs text-text-dim">{selectedIds.size} selected</span>
+						</div>
 
-							{!userPos && selectedIds.size > 0 && (
-								<Alert color="yellow" variant="light" radius="md" mb={10} icon={<IconMapPin size={16} />}>
-									Waiting for your location to compute the route…
-								</Alert>
-							)}
+						{!userPos && selectedIds.size > 0 && (
+							<Alert variant="warning" className="mb-2.5">
+								Waiting for your location to compute the route…
+							</Alert>
+						)}
 
-							{/* Google Maps hand-off */}
-							{optimized && mapsLegs.length > 0 && (
-								<Stack gap={8} mb={12}>
-									{mapsLegs.length > 1 && (
-										<Text size="xs" c="dimmed">
-											Google Maps limits stops per link, so this route is split into {mapsLegs.length} legs.
-										</Text>
-									)}
-									{mapsLegs.map((leg, i) => (
-										<div
-											key={i}
-											style={{
-												background: "var(--cc-panel)",
-												border: "1px solid var(--cc-border)",
-												borderRadius: 10,
-												padding: "10px 12px"
-											}}>
-											<Group justify="space-between" mb={6}>
-												<Text size="xs" fw={600}>
-													{mapsLegs.length > 1 ? `Leg ${i + 1}: stops ${leg.fromStop}–${leg.toStop}` : "Full route"}
-												</Text>
-											</Group>
-											<Group gap={6} wrap="nowrap">
-												<Button
-													component="a"
-													href={leg.url}
-													target="_blank"
-													rel="noopener noreferrer"
-													size="xs"
-													color="gold"
-													radius="xl"
-													leftSection={<IconExternalLink size={14} />}
-													style={{ flex: 1 }}>
-													Open
-												</Button>
-												<CopyButton value={leg.url}>
-													{({ copied, copy }) => (
-														<Button
-															size="xs"
-															variant="light"
-															color={copied ? "green" : "gold"}
-															radius="xl"
-															onClick={copy}
-															leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-															style={{ flex: 1 }}>
-															{copied ? "Copied" : "Copy"}
-														</Button>
-													)}
-												</CopyButton>
-												<ActionIcon
-													variant="light"
-													color="gold"
-													radius="xl"
-													size="lg"
-													onClick={() => setQrLeg(leg)}
-													aria-label="Show QR code">
-													<IconQrcode size={16} />
-												</ActionIcon>
-											</Group>
+						{/* Google Maps hand-off */}
+						{optimized && mapsLegs.length > 0 && (
+							<div className="mb-3 flex flex-col gap-2">
+								{mapsLegs.length > 1 && (
+									<p className="text-xs text-text-dim">
+										Google Maps limits stops per link, so this route is split into {mapsLegs.length} legs.
+									</p>
+								)}
+								{mapsLegs.map((leg, i) => (
+									<div key={i} className="rounded-lg border border-border bg-bg-card p-3">
+										<p className="mb-1.5 text-xs font-semibold text-text">
+											{mapsLegs.length > 1 ? `Leg ${i + 1}: stops ${leg.fromStop}–${leg.toStop}` : "Full route"}
+										</p>
+										<div className="flex gap-1.5">
+											<Button
+												variant="primary"
+												size="sm"
+												className="flex-1"
+												icon={<IconExternalLink size={14} />}
+												onClick={() => window.open(leg.url, "_blank", "noopener")}>
+												Open
+											</Button>
+											<CopyLinkButton url={leg.url} />
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => setQrLeg(leg)}
+												aria-label="Show QR code">
+												<IconQrcode size={16} />
+											</Button>
 										</div>
-									))}
-								</Stack>
-							)}
+									</div>
+								))}
+							</div>
+						)}
 
-							{/* Ordered / selectable stop list */}
-							<Stack gap={8}>
-								{activeReports.map(report => {
-									const orderIndex = optimized
-										? optimized.order.findIndex(s => s.id === report.id)
-										: -1;
-									const checked = selectedIds.has(report.id);
-									return (
-										<div
-											key={report.id}
-											style={{
-												background: "var(--cc-panel)",
-												border: "1px solid var(--cc-border)",
-												borderRadius: 12,
-												padding: "12px",
-												display: "flex",
-												alignItems: "flex-start",
-												gap: 10
-											}}>
-											<Checkbox
-												color="gold"
-												checked={checked}
-												onChange={() => toggle(report.id)}
-												mt={2}
-											/>
-											{orderIndex >= 0 && (
-												<div
-													style={{
-														width: 22,
-														height: 22,
-														borderRadius: "50%",
-														background: "var(--cc-accent)",
-														color: "#151515",
-														fontSize: 11,
-														fontWeight: 700,
-														display: "flex",
-														alignItems: "center",
-														justifyContent: "center",
-														flexShrink: 0,
-														marginTop: 1
-													}}>
-													{orderIndex + 1}
-												</div>
-											)}
-											<div style={{ flex: 1, minWidth: 0 }}>
-												<Group justify="space-between" mb={4} wrap="nowrap">
-													<Text
-														fw={600}
-														size="sm"
-														style={{
-															overflow: "hidden",
-															textOverflow: "ellipsis",
-															whiteSpace: "nowrap",
-															flex: 1
-														}}>
-														{report.title}
-													</Text>
-													<Badge color={URGENCY_COLORS[report.urgency]} variant="light" size="xs">
-														{report.priority}
-													</Badge>
-												</Group>
-												<Group gap={4}>
-													<IconMapPin size={12} color="var(--cc-text-muted)" />
-													<Text
-														size="xs"
-														c="dimmed"
-														style={{
-															overflow: "hidden",
-															textOverflow: "ellipsis",
-															whiteSpace: "nowrap"
-														}}>
-														{report.address}
-													</Text>
-												</Group>
+						{/* Selectable / ordered stop list */}
+						<div className="flex flex-col gap-2">
+							{activeReports.map(report => {
+								const orderIndex = optimized
+									? optimized.order.findIndex(s => s.id === report.id)
+									: -1;
+								return (
+									<div
+										key={report.id}
+										className="flex items-start gap-2.5 rounded-xl border border-border bg-bg-card p-3">
+										<Checkbox checked={selectedIds.has(report.id)} onChange={() => toggle(report.id)} />
+										{orderIndex >= 0 && (
+											<div className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-text-on-accent">
+												{orderIndex + 1}
+											</div>
+										)}
+										<div className="min-w-0 flex-1">
+											<div className="mb-1 flex items-center justify-between gap-2">
+												<span className="flex-1 truncate text-sm font-semibold text-text">
+													{report.title}
+												</span>
+												<Badge variant={URGENCY_VARIANT[report.urgency] ?? "neutral"}>
+													{report.priority}
+												</Badge>
+											</div>
+											<div className="flex items-center gap-1 text-text-dim">
+												<IconMapPin size={12} className="text-text-muted" />
+												<span className="truncate text-xs">{report.address}</span>
 											</div>
 										</div>
-									);
-								})}
-							</Stack>
-						</>
-					)}
-				</Stack>
-			</ScrollArea>
+									</div>
+								);
+							})}
+						</div>
+					</>
+				)}
+			</div>
 
 			<Modal
-				opened={!!qrLeg}
+				open={!!qrLeg}
 				onClose={() => setQrLeg(null)}
 				title="Scan to open in Google Maps"
-				centered
-				radius="md"
-				styles={{ content: { background: "var(--cc-panel)" } }}>
+				size="sm">
 				{qrLeg && (
-					<Stack gap={12} align="center">
+					<div className="flex flex-col items-center gap-3">
 						<QrCanvas url={qrLeg.url} />
-						<Text size="xs" c="dimmed" ta="center">
+						<p className="text-center text-xs text-text-dim">
 							Point your phone camera at the code to open the directions.
-						</Text>
-					</Stack>
+						</p>
+					</div>
 				)}
 			</Modal>
 		</div>

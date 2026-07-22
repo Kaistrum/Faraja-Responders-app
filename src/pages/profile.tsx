@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
-import { Text, Group, Button, Badge, Loader } from "@mantine/core";
+import { Card, Badge, Button, Spinner } from "@kaistrum/stratum-ui";
 import {
 	IconUser,
 	IconBuilding,
@@ -19,22 +19,18 @@ function InfoRow({
 	label: rowLabel,
 	value
 }: {
-	icon: React.ComponentType<{ size: number; color: string }>;
+	icon: React.ComponentType<{ size: number; className?: string }>;
 	label: string;
 	value: string;
 }) {
 	return (
-		<Group gap={12} py={12} style={{ borderBottom: "1px solid var(--cc-border)" }}>
-			<Icon size={18} color="var(--cc-text-muted)" />
-			<div style={{ minWidth: 0 }}>
-				<Text size="xs" c="dimmed" mb={1}>
-					{rowLabel}
-				</Text>
-				<Text size="sm" fw={500} style={{ wordBreak: "break-word" }}>
-					{value}
-				</Text>
+		<div className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
+			<Icon size={18} className="shrink-0 text-text-muted" />
+			<div className="min-w-0">
+				<p className="mb-0.5 text-xs text-text-dim">{rowLabel}</p>
+				<p className="break-words text-sm font-medium text-text">{value}</p>
 			</div>
-		</Group>
+		</div>
 	);
 }
 
@@ -48,98 +44,56 @@ export default function ProfilePage() {
 
 	if (isLoading || !responder) {
 		return (
-			<div
-				style={{
-					height: "100dvh",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					background: "var(--cc-bg)"
-				}}>
-				<Loader color="gold" />
+			<div className="flex h-[100dvh] items-center justify-center bg-bg">
+				<Spinner size={28} />
 			</div>
 		);
 	}
 
 	return (
-		<div
-			style={{
-				minHeight: "100dvh",
-				background: "var(--cc-bg)",
-				paddingTop: 64,
-				paddingBottom: 24
-			}}>
+		<div className="min-h-[100dvh] bg-bg pt-16 pb-6">
 			<TopNav />
 
 			{/* Header */}
-			<div
-				style={{
-					padding: "24px 16px 20px",
-					borderBottom: "1px solid var(--cc-border)"
-				}}>
-				<Text fw={700} size="lg" mb={20} style={{ fontFamily: "'Big Shoulders Display', sans-serif" }}>
-					Profile
-				</Text>
+			<div className="border-b border-border px-4 pt-6 pb-5">
+				<h1 className="mb-5 text-lg font-bold text-text">Profile</h1>
 
-				<Group gap={16} align="flex-start">
-					<div
-						style={{
-							width: 64,
-							height: 64,
-							borderRadius: "50%",
-							background: "var(--cc-accent)",
-							display: "flex",
-							alignItems: "center",
-							justifyContent: "center",
-							flexShrink: 0
-						}}>
-						<IconShieldHalf size={28} color="#151515" />
+				<div className="flex items-start gap-4">
+					<div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent">
+						<IconShieldHalf size={28} className="text-text-on-accent" />
 					</div>
-					<div style={{ minWidth: 0 }}>
-						<Text fw={700} size="lg" lh={1.2}>
-							{responder.name}
-						</Text>
-						<Group gap={6} mt={6}>
-							<Badge color="gold" variant="filled" size="xs" leftSection={<IconBriefcase size={10} />}>
+					<div className="min-w-0">
+						<p className="text-lg font-bold leading-tight text-text">{responder.name}</p>
+						<div className="mt-1.5 flex flex-wrap gap-1.5">
+							<Badge variant="accent" icon={<IconBriefcase size={11} />}>
 								{label(responder.role)}
 							</Badge>
-							<Badge color={responder.is_active ? "green" : "gray"} variant="light" size="xs">
+							<Badge variant={responder.is_active ? "success" : "neutral"}>
 								{responder.is_active ? "Active" : "Inactive"}
 							</Badge>
-						</Group>
+						</div>
 					</div>
-				</Group>
+				</div>
 			</div>
 
 			{/* Info — only fields the backend actually provides */}
-			<div style={{ padding: "16px" }}>
-				<div
-					style={{
-						background: "var(--cc-panel)",
-						borderRadius: 12,
-						padding: "0 12px"
-					}}>
-					<Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4} mt={8}>
+			<div className="p-4">
+				<Card surface="card" padding="standard">
+					<p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">
 						Account
-					</Text>
+					</p>
 					<InfoRow icon={IconUser} label="Name" value={responder.name} />
 					<InfoRow icon={IconMail} label="Email" value={responder.email} />
 					<InfoRow icon={IconBriefcase} label="Role" value={label(responder.role)} />
-					<InfoRow
-						icon={IconBuilding}
-						label="Organization"
-						value={responder.organization ?? "—"}
-					/>
+					<InfoRow icon={IconBuilding} label="Organization" value={responder.organization ?? "—"} />
 					<InfoRow icon={IconId} label="Responder ID" value={responder.responder_id} />
-				</div>
+				</Card>
 
 				<Button
-					fullWidth
 					variant="outline"
-					color="gold"
-					radius="xl"
-					leftSection={<IconLogout size={16} />}
-					mt={24}
+					fullWidth
+					icon={<IconLogout size={16} />}
+					className="mt-6"
 					onClick={logout}>
 					Sign Out
 				</Button>

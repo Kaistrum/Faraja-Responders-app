@@ -11,7 +11,6 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Popover, Text, Group, Stack } from "@mantine/core";
 import { IconStack2, IconChevronDown } from "@tabler/icons-react";
 import { CrisisReport, DisasterType, DISASTER_COLORS } from "@/types";
 import { DISASTER_ICON, DisasterGlyph } from "@/components/icons";
@@ -28,100 +27,38 @@ function disasterSvg(type: DisasterType, size: number, color: string): string {
 
 function DisasterLegend() {
 	return (
-		<div style={{ position: "absolute", bottom: 12, left: 12, zIndex: 1000 }}>
-			<Popover position="top-start" radius="md" shadow="md" offset={6} withArrow>
-				<Popover.Target>
-					<button
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 6,
-							height: 32,
-							padding: "0 12px",
-							borderRadius: 9,
-							border: "1px solid var(--cc-border)",
-							background: "var(--cc-panel)",
-							color: "var(--cc-text)",
-							cursor: "pointer",
-							fontSize: 12,
-							fontWeight: 600,
-							fontFamily: "'Public Sans', sans-serif",
-							boxShadow: "0 2px 6px rgba(0,0,0,0.4)"
-						}}>
-						<IconStack2 size={14} color="var(--cc-text-muted)" />
-						Legend
-						<IconChevronDown size={12} color="var(--cc-text-muted)" />
-					</button>
-				</Popover.Target>
-				<Popover.Dropdown
-					p={10}
-					style={{
-						minWidth: 220,
-						background: "var(--cc-panel)",
-						border: "1px solid var(--cc-border)"
-					}}>
-					<Text
-						size="xs"
-						fw={700}
-						tt="uppercase"
-						mb={6}
-						px={2}
-						style={{ color: "var(--cc-text-muted)", letterSpacing: 0.4 }}>
-						Disaster type
-					</Text>
-					<div
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-							gap: 4
-						}}>
-						{LEGEND_DISASTERS.map(type => (
-							<Group key={type} gap={8} wrap="nowrap" px={6} py={4}>
-								<span
-									style={{
-										width: 20,
-										height: 20,
-										borderRadius: "50%",
-										background: DISASTER_COLORS[type],
-										flexShrink: 0,
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "center"
-									}}>
-									<DisasterGlyph type={type} size={11} color="#ffffff" stroke={2.3} />
-								</span>
-								<Text size="xs" style={{ color: "var(--cc-text)" }}>{type}</Text>
-							</Group>
-						))}
-					</div>
-
-					<Text
-						size="xs"
-						fw={700}
-						tt="uppercase"
-						mt={12}
-						mb={6}
-						px={2}
-						style={{ color: "var(--cc-text-muted)", letterSpacing: 0.4 }}>
-						Status
-					</Text>
-					<Stack gap={2} px={6}>
-						<Group gap={8} wrap="nowrap" py={4}>
+		<details className="group absolute bottom-3 left-3 z-[1000]">
+			<summary className="flex h-8 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-border bg-bg-card px-3 text-xs font-semibold text-text shadow-md [&::-webkit-details-marker]:hidden">
+				<IconStack2 size={14} className="text-text-muted" />
+				Legend
+				<IconChevronDown size={12} className="text-text-muted transition-transform group-open:rotate-180" />
+			</summary>
+			<div className="absolute bottom-10 left-0 min-w-[220px] rounded-lg border border-border bg-bg-card p-2.5 shadow-lg">
+				<p className="mb-1.5 px-0.5 text-xs font-bold uppercase tracking-wide text-text-muted">
+					Disaster type
+				</p>
+				<div className="grid grid-cols-2 gap-1">
+					{LEGEND_DISASTERS.map(type => (
+						<div key={type} className="flex items-center gap-2 px-1.5 py-1">
 							<span
-								style={{
-									width: 11,
-									height: 11,
-									borderRadius: "50%",
-									background: "var(--cc-text-muted)",
-									flexShrink: 0
-								}}
-							/>
-							<Text size="xs" style={{ color: "var(--cc-text)" }}>Attended</Text>
-						</Group>
-					</Stack>
-				</Popover.Dropdown>
-			</Popover>
-		</div>
+								className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+								style={{ background: DISASTER_COLORS[type] }}>
+								<DisasterGlyph type={type} size={11} color="#ffffff" stroke={2.3} />
+							</span>
+							<span className="text-xs text-text">{type}</span>
+						</div>
+					))}
+				</div>
+
+				<p className="mt-3 mb-1.5 px-0.5 text-xs font-bold uppercase tracking-wide text-text-muted">
+					Status
+				</p>
+				<div className="flex items-center gap-2 px-1.5 py-1">
+					<span className="h-3 w-3 shrink-0 rounded-full bg-text-muted" />
+					<span className="text-xs text-text">Attended</span>
+				</div>
+			</div>
+		</details>
 	);
 }
 

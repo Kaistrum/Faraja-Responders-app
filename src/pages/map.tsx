@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
-import { Text, ActionIcon, Loader, Group, Stack, Alert, Button } from "@mantine/core";
-import { IconX, IconNavigation, IconCircleCheck, IconAlertCircle } from "@tabler/icons-react";
+import { Alert, Spinner } from "@kaistrum/stratum-ui";
+import { IconX, IconNavigation, IconCircleCheck } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 import { CrisisReport, DISASTER_COLORS } from "@/types";
 import { DisasterGlyph } from "@/components/icons";
@@ -15,51 +15,31 @@ import TopNav from "@/components/TopNav";
 const ResponderMap = dynamic(() => import("@/components/ResponderMap"), {
 	ssr: false,
 	loading: () => (
-		<div
-			style={{
-				height: "100%",
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				background: "var(--cc-panel)"
-			}}>
-			<Loader color="gold" size="sm" />
+		<div className="flex h-full items-center justify-center bg-bg-card">
+			<Spinner size={22} />
 		</div>
 	)
 });
 
 function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
 	return (
-		<div
-			style={{
-				background: "var(--cc-panel)",
-				border: "1px solid var(--cc-border)",
-				borderRadius: 10,
-				padding: "10px 6px",
-				flex: 1,
-				textAlign: "center"
-			}}>
-			<Text
-				fw={700}
-				size="lg"
-				style={{ color: color ?? "var(--cc-text)", fontFamily: "'Big Shoulders Display', sans-serif" }}>
+		<div className="flex-1 rounded-lg border border-border bg-bg-card px-1.5 py-2.5 text-center">
+			<p className="text-lg font-bold" style={color ? { color } : undefined}>
 				{value}
-			</Text>
-			<Text size="10px" tt="uppercase" style={{ color: "var(--cc-text-muted)", letterSpacing: 0.3 }}>
-				{label}
-			</Text>
+			</p>
+			<p className="text-[10px] uppercase tracking-wide text-text-muted">{label}</p>
 		</div>
 	);
 }
 
 function StatusChip({ color, label, count }: { color: string; label: string; count: number }) {
 	return (
-		<Group gap={5} wrap="nowrap">
-			<span style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
-			<Text size="11px" style={{ color: "var(--cc-text-dim)" }}>
-				{label} <Text span fw={700} style={{ color: "var(--cc-text)" }}>{count}</Text>
-			</Text>
-		</Group>
+		<div className="flex items-center gap-1.5 whitespace-nowrap">
+			<span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
+			<span className="text-[11px] text-text-dim">
+				{label} <span className="font-bold text-text">{count}</span>
+			</span>
+		</div>
 	);
 }
 
@@ -121,9 +101,8 @@ export default function MapPage() {
 		if (Notification.permission === "default") Notification.requestPermission().catch(() => {});
 	}, [responder]);
 
-	// Push the responder's live position to the backend (lat/lon are writable
-	// on PATCH /api/responders/{id}/ — verified via OPTIONS). Throttled; a
-	// failure here is non-critical so it only logs.
+	// Push the responder's live position to the backend (throttled). Failure
+	// here is non-critical so it only logs.
 	useEffect(() => {
 		if (!responder || !userPos) return;
 		const now = Date.now();
@@ -145,15 +124,8 @@ export default function MapPage() {
 
 	if (isLoading || !responder) {
 		return (
-			<div
-				style={{
-					height: "100dvh",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					background: "var(--cc-bg)"
-				}}>
-				<Loader color="gold" />
+			<div className="flex h-[100dvh] items-center justify-center bg-bg">
+				<Spinner size={28} />
 			</div>
 		);
 	}
@@ -176,63 +148,41 @@ export default function MapPage() {
 		.slice(0, 12);
 
 	return (
-		<div style={{ height: "100dvh", display: "flex", flexDirection: "column", paddingTop: 64, background: "var(--cc-bg)" }}>
+		<div className="flex h-[100dvh] flex-col bg-bg pt-16">
 			<TopNav />
 
 			<div className="mapSplit">
-				{/* Left: stats + map + status strip */}
 				<div className="mapCol">
 					{error && (
-						<Alert
-							icon={<IconAlertCircle size={16} />}
-							color="red"
-							variant="light"
-							radius={0}
-							styles={{ root: { flexShrink: 0 } }}>
+						<Alert variant="danger" className="!rounded-none">
 							{error}
 						</Alert>
 					)}
 					{!error && failedCount > 0 && (
-						<Alert
-							icon={<IconAlertCircle size={16} />}
-							color="yellow"
-							variant="light"
-							radius={0}
-							styles={{ root: { flexShrink: 0 } }}>
+						<Alert variant="warning" className="!rounded-none">
 							{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
 						</Alert>
 					)}
 
-					<Group gap={8} px={16} py={12} wrap="nowrap" style={{ flexShrink: 0 }}>
+					<div className="flex flex-shrink-0 gap-2 px-4 py-3">
 						<StatCard label="Total" value={loading ? "—" : String(reports.length)} />
-						<StatCard label="Active" value={loading ? "—" : String(activeCount)} color="#ef4444" />
-						<StatCard label="Attended" value={loading ? "—" : String(attendedCount)} color="#4caf6a" />
-						{avgResp && <StatCard label="Avg. Resp." value={avgResp} color="var(--cc-accent)" />}
-					</Group>
+						<StatCard label="Active" value={loading ? "—" : String(activeCount)} color="var(--danger)" />
+						<StatCard label="Attended" value={loading ? "—" : String(attendedCount)} color="var(--success)" />
+						{avgResp && <StatCard label="Avg. Resp." value={avgResp} color="var(--accent)" />}
+					</div>
 
 					{navTarget && (
-						<div
-							style={{
-								background: "var(--cc-panel)",
-								color: "var(--cc-text)",
-								padding: "10px 16px",
-								display: "flex",
-								alignItems: "center",
-								gap: 8,
-								flexShrink: 0,
-								zIndex: 20
-							}}>
-							<IconNavigation size={16} color="var(--cc-accent)" />
-							<Text size="sm" fw={500} style={{ flex: 1, color: "var(--cc-text)" }}>
+						<div className="z-20 flex flex-shrink-0 items-center gap-2 bg-bg-card px-4 py-2.5">
+							<IconNavigation size={16} className="text-accent" />
+							<span className="flex-1 text-sm font-medium text-text">
 								Navigating → {navTarget.report.title}
-							</Text>
-							<ActionIcon
-								variant="subtle"
-								size="sm"
+							</span>
+							<button
 								onClick={() => setNavTarget(null)}
-								style={{ color: "var(--cc-text)" }}>
+								className="text-text-muted hover:text-text"
+								aria-label="Cancel navigation">
 								<IconX size={16} />
-							</ActionIcon>
+							</button>
 						</div>
 					)}
 
@@ -245,107 +195,72 @@ export default function MapPage() {
 						/>
 					</div>
 
-					<Group
-						gap={14}
-						px={16}
-						py={8}
-						wrap="nowrap"
-						style={{
-							flexShrink: 0,
-							borderTop: "1px solid var(--cc-border)",
-							borderBottom: "1px solid var(--cc-border)",
-							background: "var(--cc-panel)",
-							overflowX: "auto"
-						}}>
-						<Group gap={5} wrap="nowrap">
+					<div className="flex flex-shrink-0 items-center gap-3.5 overflow-x-auto border-y border-border bg-bg-card px-4 py-2">
+						<div className="flex items-center gap-1.5 whitespace-nowrap">
 							<span
+								className="h-1.5 w-1.5 shrink-0 rounded-full"
 								style={{
-									width: 7,
-									height: 7,
-									borderRadius: "50%",
-									background: error ? "#ef4444" : "#4caf6a",
-									flexShrink: 0,
-									boxShadow: `0 0 0 3px ${error ? "rgba(239,68,68,0.25)" : "rgba(76,175,106,0.25)"}`
+									background: error ? "var(--danger)" : "var(--success)",
+									boxShadow: `0 0 0 3px ${error ? "var(--danger-faint)" : "var(--success-faint)"}`
 								}}
 							/>
-							<Text size="11px" fw={700} style={{ color: error ? "#ef4444" : "#4caf6a", letterSpacing: 0.5 }}>
+							<span
+								className="text-[11px] font-bold tracking-wide"
+								style={{ color: error ? "var(--danger)" : "var(--success)" }}>
 								{error ? "OFFLINE" : "LIVE"}
-							</Text>
-						</Group>
-						<StatusChip color="var(--cc-text-muted)" label="ALL" count={reports.length} />
-						<StatusChip color="#ef4444" label="ACTIVE" count={activeCount} />
-						<StatusChip color="#4caf6a" label="ATTENDED" count={attendedCount} />
-					</Group>
+							</span>
+						</div>
+						<StatusChip color="var(--text-muted)" label="ALL" count={reports.length} />
+						<StatusChip color="var(--danger)" label="ACTIVE" count={activeCount} />
+						<StatusChip color="var(--success)" label="ATTENDED" count={attendedCount} />
+					</div>
 				</div>
 
-				{/* Right (desktop) / below (mobile): live feed */}
 				<div className="feedCol">
-					<Stack gap={0} px={16} pt={12} pb={24}>
-						<Text size="xs" fw={700} tt="uppercase" mb={8} style={{ color: "var(--cc-text-muted)", letterSpacing: 0.4 }}>
+					<div className="px-4 pt-3 pb-6">
+						<p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
 							Live Feed
-						</Text>
+						</p>
 						{loading && (
-							<Group justify="center" py={24}>
-								<Loader color="gold" size="sm" />
-							</Group>
+							<div className="flex justify-center py-6">
+								<Spinner size={22} />
+							</div>
 						)}
 						{!loading && !error && feedItems.length === 0 && (
-							<Text size="sm" c="dimmed" ta="center" py={24}>
-								No assignments yet
-							</Text>
+							<p className="py-6 text-center text-sm text-text-dim">No assignments yet</p>
 						)}
 						{!loading && error && feedItems.length === 0 && (
-							<Text size="sm" c="red" ta="center" py={24}>
-								Could not load assignments
-							</Text>
+							<p className="py-6 text-center text-sm text-danger">Could not load assignments</p>
 						)}
 						{feedItems.map(item => (
 							<button
 								key={item.key}
 								onClick={() => setSelectedReport(item.report)}
-								style={{
-									width: "100%",
-									background: "none",
-									border: "none",
-									borderBottom: "1px solid var(--cc-border)",
-									padding: "10px 2px",
-									cursor: "pointer",
-									textAlign: "left",
-									display: "flex",
-									alignItems: "center",
-									gap: 10
-								}}>
+								className="flex w-full items-center gap-2.5 border-b border-border py-2.5 text-left">
 								<span
+									className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-full"
 									style={{
 										width: 26,
 										height: 26,
-										borderRadius: "50%",
-										background: item.attended ? "var(--cc-hover)" : DISASTER_COLORS[item.report.disasterType],
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "center",
-										flexShrink: 0
+										background: item.attended ? "var(--bg-surface)" : DISASTER_COLORS[item.report.disasterType]
 									}}>
 									{item.attended ? (
-										<IconCircleCheck size={14} color="#4caf6a" />
+										<IconCircleCheck size={14} className="text-success" />
 									) : (
 										<DisasterGlyph type={item.report.disasterType} size={13} color="#ffffff" />
 									)}
 								</span>
-								<div style={{ flex: 1, minWidth: 0 }}>
-									<Text size="xs" style={{ color: "var(--cc-text)" }}>
-										<Text span fw={600}>
-											{item.label}
-										</Text>{" "}
-										— {item.report.title}
-									</Text>
+								<div className="min-w-0 flex-1">
+									<span className="text-xs text-text">
+										<span className="font-semibold">{item.label}</span> — {item.report.title}
+									</span>
 								</div>
-								<Text size="10px" style={{ color: "var(--cc-text-muted)", flexShrink: 0 }}>
+								<span className="shrink-0 text-[10px] text-text-muted">
 									{formatFeedTime(item.at)}
-								</Text>
+								</span>
 							</button>
 						))}
-					</Stack>
+					</div>
 				</div>
 			</div>
 
@@ -378,7 +293,7 @@ export default function MapPage() {
 					overflow: hidden;
 				}
 				.feedCol {
-					border-top: 1px solid var(--cc-border);
+					border-top: 1px solid var(--border);
 				}
 				@media (min-width: 900px) {
 					.mapSplit {
@@ -399,7 +314,7 @@ export default function MapPage() {
 						width: 360px;
 						flex-shrink: 0;
 						border-top: none;
-						border-left: 1px solid var(--cc-border);
+						border-left: 1px solid var(--border);
 						height: 100%;
 						overflow-y: auto;
 					}

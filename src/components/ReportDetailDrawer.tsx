@@ -1,17 +1,5 @@
 import { useState } from "react";
-import {
-	Drawer,
-	Badge,
-	Text,
-	Group,
-	Stack,
-	Button,
-	Textarea,
-	Modal,
-	ScrollArea,
-	Divider,
-	ActionIcon
-} from "@mantine/core";
+import { Badge, Button, Textarea, Modal } from "@kaistrum/stratum-ui";
 import {
 	IconMapPin,
 	IconClock,
@@ -24,33 +12,25 @@ import { CrisisReport } from "@/types";
 import { label } from "@/lib/api";
 import { singleDestinationUrl } from "@/utils/routing";
 
-const URGENCY_COLORS: Record<string, string> = {
-	critical: "red",
-	high: "orange",
-	medium: "yellow",
-	low: "green"
+type BadgeVariant = "accent" | "info" | "success" | "warning" | "danger" | "neutral" | "outline";
+
+const PRIORITY_VARIANT: Record<string, BadgeVariant> = {
+	critical: "danger",
+	high: "warning",
+	medium: "info",
+	low: "success"
 };
 
 function formatTime(iso: string) {
-	return new Date(iso).toLocaleString("en-KE", {
-		dateStyle: "medium",
-		timeStyle: "short"
-	});
+	return new Date(iso).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function FieldRow({ name, value }: { name: string; value: React.ReactNode }) {
 	return (
-		<>
-			<Group justify="space-between" wrap="nowrap" gap={12}>
-				<Text size="sm" fw={500} style={{ flexShrink: 0 }}>
-					{name}
-				</Text>
-				<Text size="sm" ta="right" style={{ minWidth: 0 }}>
-					{value}
-				</Text>
-			</Group>
-			<Divider color="var(--cc-border)" />
-		</>
+		<div className="flex items-center justify-between gap-3 border-b border-border py-2.5">
+			<span className="shrink-0 text-sm font-medium text-text-dim">{name}</span>
+			<span className="min-w-0 text-right text-sm text-text">{value}</span>
+		</div>
 	);
 }
 
@@ -72,7 +52,6 @@ export default function ReportDetailDrawer({
 
 	if (!report) return null;
 
-	const urgencyColor = URGENCY_COLORS[report.urgency] ?? "gray";
 	const isAttended = report.status === "attended";
 
 	const handleMarkAttended = () => {
@@ -84,210 +63,134 @@ export default function ReportDetailDrawer({
 
 	return (
 		<>
-			<Drawer
-				opened={!!report}
-				onClose={onClose}
-				position="bottom"
-				size="85%"
-				withCloseButton={false}
-				styles={{
-					content: {
-						borderRadius: "16px 16px 0 0",
-						background: "var(--cc-panel)"
-					},
-					body: { padding: 0, height: "100%" }
-				}}>
+			{/* Overlay */}
+			<div className="fixed inset-0 z-[1100] bg-overlay-bg" onClick={onClose} />
+
+			{/* Bottom sheet */}
+			<div className="fixed inset-x-0 bottom-0 z-[1101] flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-border bg-bg-card">
 				{/* Header */}
-				<div
-					style={{
-						padding: "16px 16px 0",
-						background: "var(--cc-panel)",
-						position: "sticky",
-						top: 0,
-						zIndex: 10
-					}}>
-					<Group justify="space-between" mb={8}>
-						<Group gap={8}>
-							<Badge
-								color={urgencyColor}
-								variant="filled"
-								size="sm"
-								tt="uppercase">
+				<div className="border-b border-border px-4 pt-4 pb-3">
+					<div className="mb-2 flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							<Badge variant={PRIORITY_VARIANT[report.urgency] ?? "neutral"}>
 								{report.priority}
 							</Badge>
-							<Badge color={isAttended ? "gray" : "gold"} variant="light" size="sm">
+							<Badge variant={isAttended ? "neutral" : "accent"}>
 								{label(report.assignmentStatus)}
 							</Badge>
-						</Group>
-						<ActionIcon
-							variant="subtle"
-							color="gold"
+						</div>
+						<button
 							onClick={onClose}
-							size="sm">
-							<IconX size={16} />
-						</ActionIcon>
-					</Group>
+							className="text-text-muted transition-colors hover:text-text"
+							aria-label="Close">
+							<IconX size={18} />
+						</button>
+					</div>
 
-					<Text fw={700} size="lg" lh={1.3} mb={4}>
-						{report.title}
-					</Text>
-
-					<Group gap={6} mb={4}>
-						<IconMapPin size={14} color="var(--cc-text-muted)" />
-						<Text size="xs" c="dimmed" style={{ flex: 1 }}>
-							{report.address}
-						</Text>
-					</Group>
-					<Group gap={6} mb={12}>
-						<IconClock size={14} color="var(--cc-text-muted)" />
-						<Text size="xs" c="dimmed">
-							Reported {formatTime(report.reportedAt)}
-						</Text>
-					</Group>
-
-					<Divider color="var(--cc-border)" />
+					<h2 className="mb-1 text-lg font-bold leading-snug text-text">{report.title}</h2>
+					<div className="mb-1 flex items-center gap-1.5 text-text-dim">
+						<IconMapPin size={14} className="text-text-muted" />
+						<span className="text-xs">{report.address}</span>
+					</div>
+					<div className="flex items-center gap-1.5 text-text-dim">
+						<IconClock size={14} className="text-text-muted" />
+						<span className="text-xs">Reported {formatTime(report.reportedAt)}</span>
+					</div>
 				</div>
 
-				<ScrollArea style={{ height: "calc(100% - 220px)" }} px={16} py={12}>
-					<Stack gap={10}>
-						{report.photoUrl && (
-							<img
-								src={report.photoUrl}
-								alt="Report photo"
-								style={{
-									width: "100%",
-									aspectRatio: "4/3",
-									objectFit: "cover",
-									borderRadius: 8,
-									display: "block"
-								}}
-							/>
-						)}
-
-						<FieldRow name="Nature of crisis" value={label(report.natureOfCrisis)} />
-						<FieldRow name="Damage level" value={label(report.damageLevel)} />
-						<FieldRow name="Infrastructure" value={label(report.infrastructureType)} />
-						<FieldRow
-							name="Debris present"
-							value={
-								<Badge color={report.debris ? "red" : "green"} variant="light" size="sm">
-									{report.debris ? "Yes" : "No"}
-								</Badge>
-							}
+				{/* Body */}
+				<div className="flex-1 overflow-y-auto px-4 py-3">
+					{report.photoUrl && (
+						// eslint-disable-next-line @next/next/no-img-element
+						<img
+							src={report.photoUrl}
+							alt="Report photo"
+							className="mb-3 block aspect-[4/3] w-full rounded-lg object-cover"
 						/>
-						<FieldRow
-							name="Affected units"
-							value={report.affectedUnits ?? "Not recorded"}
-						/>
-						<FieldRow name="Assigned" value={formatTime(report.assignedAt)} />
-						{report.dueDate && (
-							<FieldRow name="Due" value={formatTime(report.dueDate)} />
-						)}
-						{report.attendedAt && (
-							<FieldRow name="Completed" value={formatTime(report.attendedAt)} />
-						)}
+					)}
+					<FieldRow name="Nature of crisis" value={label(report.natureOfCrisis)} />
+					<FieldRow name="Damage level" value={label(report.damageLevel)} />
+					<FieldRow name="Infrastructure" value={label(report.infrastructureType)} />
+					<FieldRow
+						name="Debris present"
+						value={
+							<Badge variant={report.debris ? "danger" : "success"}>
+								{report.debris ? "Yes" : "No"}
+							</Badge>
+						}
+					/>
+					<FieldRow name="Affected units" value={report.affectedUnits ?? "Not recorded"} />
+					<FieldRow name="Assigned" value={formatTime(report.assignedAt)} />
+					{report.dueDate && <FieldRow name="Due" value={formatTime(report.dueDate)} />}
+					{report.attendedAt && <FieldRow name="Completed" value={formatTime(report.attendedAt)} />}
 
-						{report.notes && (
-							<div
-								style={{
-									background: "var(--cc-hover)",
-									borderRadius: 8,
-									padding: "10px 12px"
-								}}>
-								<Text size="xs" fw={600} mb={4}>
-									Notes
-								</Text>
-								<Text size="sm">{report.notes}</Text>
-							</div>
-						)}
-					</Stack>
-				</ScrollArea>
+					{report.notes && (
+						<div className="mt-3 rounded-lg bg-bg-surface p-3">
+							<p className="mb-1 text-xs font-semibold text-text-dim">Notes</p>
+							<p className="text-sm text-text">{report.notes}</p>
+						</div>
+					)}
+				</div>
 
-				{/* Footer actions */}
-				<div
-					style={{
-						padding: "12px 16px",
-						background: "var(--cc-panel)",
-						borderTop: "1px solid var(--cc-border)",
-						position: "sticky",
-						bottom: 0
-					}}>
-					<Stack gap={8}>
-						<Group gap={8}>
-							<Button
-								leftSection={<IconNavigation size={16} />}
-								variant="outline"
-								color="gold"
-								radius="xl"
-								style={{ flex: 1 }}
-								onClick={() => {
-									onNavigate(report);
-									onClose();
-								}}>
-								Navigate
-							</Button>
-							{!isAttended && (
-								<Button
-									leftSection={<IconCircleCheck size={16} />}
-									color="gold"
-									radius="xl"
-									style={{ flex: 1 }}
-									onClick={() => setAttendModalOpen(true)}>
-									Mark Attended
-								</Button>
-							)}
-						</Group>
+				{/* Footer */}
+				<div className="flex flex-col gap-2 border-t border-border bg-bg-card px-4 py-3">
+					<div className="flex gap-2">
 						<Button
-							component="a"
-							href={singleDestinationUrl([report.location.lat, report.location.lng])}
-							target="_blank"
-							rel="noopener noreferrer"
-							leftSection={<IconBrandGoogleMaps size={16} />}
-							variant="light"
-							color="gold"
-							radius="xl"
-							fullWidth>
-							Open in Google Maps
+							variant="outline"
+							icon={<IconNavigation size={16} />}
+							className="flex-1"
+							onClick={() => {
+								onNavigate(report);
+								onClose();
+							}}>
+							Navigate
 						</Button>
-					</Stack>
+						{!isAttended && (
+							<Button
+								variant="primary"
+								icon={<IconCircleCheck size={16} />}
+								className="flex-1"
+								onClick={() => setAttendModalOpen(true)}>
+								Mark Attended
+							</Button>
+						)}
+					</div>
+					<a
+						href={singleDestinationUrl([report.location.lat, report.location.lng])}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center justify-center gap-2 rounded-lg border border-border py-2.5 text-sm font-medium text-text transition-colors hover:border-accent hover:text-accent">
+						<IconBrandGoogleMaps size={16} />
+						Open in Google Maps
+					</a>
 				</div>
-			</Drawer>
+			</div>
 
-			{/* Mark attended modal */}
+			{/* Mark-attended confirmation */}
 			<Modal
-				opened={attendModalOpen}
+				open={attendModalOpen}
 				onClose={() => setAttendModalOpen(false)}
 				title="Mark as Attended"
-				centered
-				radius="md"
-				styles={{ content: { background: "var(--cc-panel)" } }}>
-				<Stack gap={16}>
-					<Text size="sm" c="dimmed">
-						Add any notes about the situation before marking this report as
-						attended.
-					</Text>
+				size="sm">
+				<div className="flex flex-col gap-4">
+					<p className="text-sm text-text-dim">
+						Add any notes about the situation before marking this report as attended.
+					</p>
 					<Textarea
 						placeholder="E.g. Area cordoned off, utility team notified..."
-						minRows={3}
-						radius="md"
+						rows={3}
 						value={notes}
 						onChange={e => setNotes(e.currentTarget.value)}
-						styles={{
-							input: { background: "var(--cc-panel)", borderColor: "var(--cc-border)", color: "var(--cc-text)" }
-						}}
 					/>
-					<Group justify="flex-end" gap={8}>
-						<Button
-							variant="subtle"
-							color="gold"
-							onClick={() => setAttendModalOpen(false)}>
+					<div className="flex justify-end gap-2">
+						<Button variant="ghost" onClick={() => setAttendModalOpen(false)}>
 							Cancel
 						</Button>
-						<Button color="gold" radius="xl" onClick={handleMarkAttended}>
+						<Button variant="primary" onClick={handleMarkAttended}>
 							Confirm
 						</Button>
-					</Group>
-				</Stack>
+					</div>
+				</div>
 			</Modal>
 		</>
 	);

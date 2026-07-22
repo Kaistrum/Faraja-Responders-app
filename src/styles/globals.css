@@ -1,22 +1,24 @@
-@import url("https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap");
-@import "tailwindcss";
+/* Stratum design system entry: pulls in Tailwind v4, the design tokens, and
+   the @theme mapping that exposes utilities like bg-accent / text-text-muted /
+   border-border. Imported from the package so it stays in sync. */
+@import "@kaistrum/stratum-ui/styles/globals.css";
 
-:root {
-	/* CrisisCleanup-inspired dark theme */
-	--cc-bg: #151515;
-	--cc-panel: #1f1c18;
-	--cc-hover: #262320;
-	--cc-border: #35312b;
-	--cc-text: #f5f3ef;
-	--cc-text-dim: #b8b3a8;
-	--cc-text-muted: #837c6f;
-	--cc-accent: #fece09;
-	--cc-accent-2: #f79820;
-}
+/* Stratum ships no prebuilt CSS — its compiled components only *reference*
+   Tailwind utility classes. Tailwind v4 skips node_modules by default, so we
+   must explicitly scan the library so those classes actually get generated. */
+@source "../../node_modules/@kaistrum/stratum-ui/dist-lib/index.js";
 
+html,
 body {
-	font-family: "Public Sans", sans-serif;
-	font-weight: normal;
-	background-color: var(--cc-bg);
-	color: var(--cc-text);
+	background-color: var(--bg);
+	color: var(--text);
+	font-family: var(--font-sans);
 }
+
+/* Soften Stratum's sharp corners (the design system defaults to 0px, which it
+   applies via a hardcoded `rounded-none` on cards/inputs/buttons). Unlayered
+   so it beats Tailwind's layered utility; `rounded-full` pills are untouched. */
+.rounded-none {
+	border-radius: 8px;
+}
+
