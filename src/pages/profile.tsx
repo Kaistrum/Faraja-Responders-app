@@ -1,65 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/router";
-import {
-	Text,
-	Stack,
-	Group,
-	Button,
-	Divider,
-	Badge,
-	Loader
-} from "@mantine/core";
+import { Text, Group, Button, Badge, Loader } from "@mantine/core";
 import {
 	IconUser,
-	IconBadge,
 	IconBuilding,
-	IconPhone,
 	IconMail,
 	IconLogout,
 	IconShieldHalf,
-	IconChecklist,
-	IconClock,
-	IconAlertTriangle
+	IconId,
+	IconBriefcase
 } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
-import { CrisisReport } from "@/types";
+import { label } from "@/lib/api";
 import TopNav from "@/components/TopNav";
-
-function StatCard({
-	icon: Icon,
-	label,
-	value,
-	color = "var(--cc-accent)"
-}: {
-	icon: React.ComponentType<{ size: number; color: string }>;
-	label: string;
-	value: string;
-	color?: string;
-}) {
-	return (
-		<div
-			style={{
-				background: "var(--cc-panel)",
-				borderRadius: 12,
-				padding: "16px 12px",
-				flex: 1,
-				textAlign: "center",
-				border: "1px solid var(--cc-border)"
-			}}>
-			<Icon size={20} color={color} />
-			<Text fw={700} size="xl" mt={6} mb={2} style={{ color }}>
-				{value}
-			</Text>
-			<Text size="xs" c="dimmed">
-				{label}
-			</Text>
-		</div>
-	);
-}
 
 function InfoRow({
 	icon: Icon,
-	label,
+	label: rowLabel,
 	value
 }: {
 	icon: React.ComponentType<{ size: number; color: string }>;
@@ -69,11 +26,11 @@ function InfoRow({
 	return (
 		<Group gap={12} py={12} style={{ borderBottom: "1px solid var(--cc-border)" }}>
 			<Icon size={18} color="var(--cc-text-muted)" />
-			<div>
+			<div style={{ minWidth: 0 }}>
 				<Text size="xs" c="dimmed" mb={1}>
-					{label}
+					{rowLabel}
 				</Text>
-				<Text size="sm" fw={500}>
+				<Text size="sm" fw={500} style={{ wordBreak: "break-word" }}>
 					{value}
 				</Text>
 			</div>
@@ -84,19 +41,10 @@ function InfoRow({
 export default function ProfilePage() {
 	const { responder, isLoading, logout } = useAuth();
 	const router = useRouter();
-	const [reports, setReports] = useState<CrisisReport[]>([]);
 
 	useEffect(() => {
 		if (!isLoading && !responder) router.replace("/login");
 	}, [responder, isLoading, router]);
-
-	useEffect(() => {
-		if (!responder) return;
-		fetch("/api/reports")
-			.then(res => res.json())
-			.then(setReports)
-			.catch(err => console.error("Failed to load reports:", err));
-	}, [responder]);
 
 	if (isLoading || !responder) {
 		return (
@@ -112,11 +60,6 @@ export default function ProfilePage() {
 			</div>
 		);
 	}
-
-	const activeReports = reports.filter(r => r.status === "assigned").length;
-	const attendedReports = reports.filter(
-		r => r.status === "attended"
-	).length;
 
 	return (
 		<div
@@ -138,7 +81,6 @@ export default function ProfilePage() {
 					Profile
 				</Text>
 
-				{/* Avatar */}
 				<Group gap={16} align="flex-start">
 					<div
 						style={{
@@ -153,78 +95,42 @@ export default function ProfilePage() {
 						}}>
 						<IconShieldHalf size={28} color="#151515" />
 					</div>
-					<div>
+					<div style={{ minWidth: 0 }}>
 						<Text fw={700} size="lg" lh={1.2}>
 							{responder.name}
 						</Text>
-						<Group gap={6} mt={4}>
-							<Badge
-								color="gold"
-								variant="filled"
-								size="xs"
-								leftSection={<IconBadge size={10} />}>
-								{responder.badge}
+						<Group gap={6} mt={6}>
+							<Badge color="gold" variant="filled" size="xs" leftSection={<IconBriefcase size={10} />}>
+								{label(responder.role)}
+							</Badge>
+							<Badge color={responder.is_active ? "green" : "gray"} variant="light" size="xs">
+								{responder.is_active ? "Active" : "Inactive"}
 							</Badge>
 						</Group>
-						<Text size="xs" c="dimmed" mt={4}>
-							{responder.department}
-						</Text>
 					</div>
 				</Group>
 			</div>
 
-			{/* Stats */}
+			{/* Info — only fields the backend actually provides */}
 			<div style={{ padding: "16px" }}>
-				<Group grow gap={8} mb={20}>
-					<StatCard
-						icon={IconChecklist}
-						label="Attended"
-						value={String(responder.stats.reportsAttended + attendedReports)}
-					/>
-					<StatCard
-						icon={IconClock}
-						label="Avg. Response"
-						value={responder.stats.avgResponseTime}
-					/>
-					<StatCard
-						icon={IconAlertTriangle}
-						label="Active"
-						value={String(activeReports)}
-						color="#ef4444"
-					/>
-				</Group>
-
-				{/* Info */}
 				<div
 					style={{
 						background: "var(--cc-panel)",
 						borderRadius: 12,
-						padding: "0 4px"
+						padding: "0 12px"
 					}}>
-					<Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4} mt={4}>
-						Contact
+					<Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4} mt={8}>
+						Account
 					</Text>
-					<InfoRow icon={IconPhone} label="Phone" value={responder.phone} />
+					<InfoRow icon={IconUser} label="Name" value={responder.name} />
 					<InfoRow icon={IconMail} label="Email" value={responder.email} />
-				</div>
-
-				<div
-					style={{
-						background: "var(--cc-panel)",
-						borderRadius: 12,
-						padding: "0 4px",
-						marginTop: 16
-					}}>
-					<Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4} mt={4}>
-						Unit
-					</Text>
+					<InfoRow icon={IconBriefcase} label="Role" value={label(responder.role)} />
 					<InfoRow
 						icon={IconBuilding}
-						label="Department"
-						value={responder.department}
+						label="Organization"
+						value={responder.organization ?? "—"}
 					/>
-					<InfoRow icon={IconBadge} label="Badge No." value={responder.badge} />
-					<InfoRow icon={IconUser} label="ID" value={responder.id} />
+					<InfoRow icon={IconId} label="Responder ID" value={responder.responder_id} />
 				</div>
 
 				<Button

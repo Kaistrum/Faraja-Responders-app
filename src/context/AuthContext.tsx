@@ -3,15 +3,18 @@ import {
 	useContext,
 	useState,
 	useEffect,
+	useCallback,
 	ReactNode
 } from "react";
 import { useRouter } from "next/router";
-import { mockResponder, MOCK_CREDENTIALS } from "@/data/mockData";
-import { Responder } from "@/types";
+import * as api from "@/lib/api";
+import type { BackendResponder } from "@/lib/api";
+
+const STORAGE_KEY = "responder_profile";
 
 interface AuthContextType {
-	responder: Responder | null;
-	login: (email: string, password: string) => boolean;
+	responder: BackendResponder | null;
+	login: (email: string, password: string) => Promise<void>;
 	logout: () => void;
 	isLoading: boolean;
 }
@@ -19,33 +22,36 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-	const [responder, setResponder] = useState<Responder | null>(null);
+	const [responder, setResponder] = useState<BackendResponder | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const router = useRouter();
 
 	useEffect(() => {
-		const stored = localStorage.getItem("responder_auth");
+		const stored = localStorage.getItem(STORAGE_KEY);
 		if (stored) setResponder(JSON.parse(stored));
 		setIsLoading(false);
 	}, []);
 
-	const login = (email: string, password: string): boolean => {
-		if (
-			email === MOCK_CREDENTIALS.email &&
-			password === MOCK_CREDENTIALS.password
-		) {
-			setResponder(mockResponder);
-			localStorage.setItem("responder_auth", JSON.stringify(mockResponder));
-			return true;
+	// Note: this only proves email+password matched a Responder row and finds
+	// that row afterward (there's no "current session" endpoint on this
+	// backend). The Django session cookie set during login is the actual
+	// auth used on subsequent write calls.
+	const login = useCallback(async (email: string, password: string) => {
+		await api.login(email, password);
+		const found = await api.findResponderByEmail(email);
+		if (!found) {
+			throw new Error("Login succeeded, but no matching responder record was found.");
 		}
-		return false;
-	};
+		setResponder(found);
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(found));
+	}, []);
 
-	const logout = () => {
+	const logout = useCallback(() => {
+		api.logout().catch(() => {});
 		setResponder(null);
-		localStorage.removeItem("responder_auth");
+		localStorage.removeItem(STORAGE_KEY);
 		router.push("/login");
-	};
+	}, [router]);
 
 	return (
 		<AuthContext.Provider value={{ responder, login, logout, isLoading }}>

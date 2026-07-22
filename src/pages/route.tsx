@@ -1,12 +1,34 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
-import { Text, Badge, Loader, ScrollArea, Stack, Group } from "@mantine/core";
-import { IconMapPin } from "@tabler/icons-react";
+import {
+	Text,
+	Badge,
+	Loader,
+	ScrollArea,
+	Stack,
+	Group,
+	Checkbox,
+	Button,
+	Alert,
+	CopyButton,
+	Modal,
+	ActionIcon
+} from "@mantine/core";
+import {
+	IconMapPin,
+	IconAlertCircle,
+	IconExternalLink,
+	IconCopy,
+	IconCheck,
+	IconQrcode,
+	IconX
+} from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 import { CrisisReport } from "@/types";
-import { buildMultiStopRoute } from "@/utils/routing";
-import ReportDetailDrawer from "@/components/ReportDetailDrawer";
+import { buildMultiStopRoute, buildMapsLegs, type MapsLeg } from "@/utils/routing";
+import { useResponderReports } from "@/lib/useResponderReports";
+import { drawQrToCanvas } from "@/lib/qr";
 import TopNav from "@/components/TopNav";
 
 const ResponderMap = dynamic(() => import("@/components/ResponderMap"), {
@@ -32,78 +54,93 @@ const URGENCY_COLORS: Record<string, string> = {
 	low: "green"
 };
 
+function QrCanvas({ url }: { url: string }) {
+	const ref = useRef<HTMLCanvasElement | null>(null);
+	const [err, setErr] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!ref.current) return;
+		try {
+			drawQrToCanvas(ref.current, url);
+			setErr(null);
+		} catch (e) {
+			setErr(e instanceof Error ? e.message : "Could not render QR");
+		}
+	}, [url]);
+
+	return (
+		<Stack gap={6} align="center">
+			<canvas
+				ref={ref}
+				width={240}
+				height={240}
+				style={{ width: 240, height: 240, borderRadius: 8, background: "#fff", display: err ? "none" : "block" }}
+			/>
+			{err && (
+				<Text size="xs" c="red" ta="center">
+					{err}
+				</Text>
+			)}
+		</Stack>
+	);
+}
+
 export default function RoutePage() {
 	const { responder, isLoading } = useAuth();
 	const router = useRouter();
-	const [reports, setReports] = useState<CrisisReport[]>([]);
-	const [selectedReport, setSelectedReport] = useState<CrisisReport | null>(null);
+	const { reports, loading, error, failedCount } = useResponderReports();
 	const [userPos, setUserPos] = useState<[number, number] | null>(null);
-	const [orderedStops, setOrderedStops] = useState<CrisisReport[]>([]);
-	const [route, setRoute] = useState<[number, number][]>([]);
-	const [computing, setComputing] = useState(false);
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [qrLeg, setQrLeg] = useState<MapsLeg | null>(null);
 
 	useEffect(() => {
 		if (!isLoading && !responder) router.replace("/login");
 	}, [responder, isLoading, router]);
 
-	useEffect(() => {
-		if (!responder) return;
-		fetch("/api/reports")
-			.then(res => res.json())
-			.then(setReports)
-			.catch(err => console.error("Failed to load reports:", err));
-	}, [responder]);
-
-	useEffect(() => {
-		const assigned = reports.filter(r => r.status === "assigned");
-		if (!userPos || assigned.length === 0) {
-			setOrderedStops([]);
-			setRoute([]);
-			return;
-		}
-		let cancelled = false;
-		setComputing(true);
-		buildMultiStopRoute(userPos, assigned)
-			.then(({ order, route }) => {
-				if (cancelled) return;
-				setOrderedStops(order);
-				setRoute(route);
-			})
-			.catch(err => console.error("Failed to build route:", err))
-			.finally(() => {
-				if (!cancelled) setComputing(false);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [userPos, reports]);
-
-	const handleNavigate = useCallback((_report: CrisisReport) => {
-		router.push("/map");
-	}, [router]);
-
-	const handleMarkAttended = useCallback(
-		(report: CrisisReport, notes: string) => {
-			setReports(prev =>
-				prev.map(r =>
-					r.id === report.id
-						? {
-								...r,
-								status: "attended" as const,
-								attendedAt: new Date().toISOString(),
-								notes
-							}
-						: r
-				)
-			);
-			fetch(`/api/reports/${report.id}`, {
-				method: "PATCH",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ notes })
-			}).catch(err => console.error("Failed to mark report attended:", err));
-		},
-		[]
+	const activeReports = useMemo(
+		() => reports.filter(r => r.status === "assigned"),
+		[reports]
 	);
+
+	// Drop any selected ids that are no longer active (e.g. after polling).
+	useEffect(() => {
+		setSelectedIds(prev => {
+			const activeIdSet = new Set(activeReports.map(r => r.id));
+			const next = new Set([...prev].filter(id => activeIdSet.has(id)));
+			return next.size === prev.size ? prev : next;
+		});
+	}, [activeReports]);
+
+	const selectedStops = useMemo(
+		() => activeReports.filter(r => selectedIds.has(r.id)),
+		[activeReports, selectedIds]
+	);
+
+	const optimized = useMemo(() => {
+		if (!userPos || selectedStops.length === 0) return null;
+		return buildMultiStopRoute(userPos, selectedStops);
+	}, [userPos, selectedStops]);
+
+	const mapsLegs = useMemo(() => {
+		if (!userPos || !optimized) return [];
+		return buildMapsLegs(userPos, optimized.order);
+	}, [userPos, optimized]);
+
+	const toggle = useCallback((id: string) => {
+		setSelectedIds(prev => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
+
+	const allSelected = activeReports.length > 0 && selectedIds.size === activeReports.length;
+	const toggleAll = useCallback(() => {
+		setSelectedIds(prev =>
+			prev.size === activeReports.length ? new Set() : new Set(activeReports.map(r => r.id))
+		);
+	}, [activeReports]);
 
 	if (isLoading || !responder) {
 		return (
@@ -120,6 +157,10 @@ export default function RoutePage() {
 		);
 	}
 
+	const navTarget = optimized && optimized.order.length > 0
+		? { report: optimized.order[0], route: optimized.route }
+		: null;
+
 	return (
 		<div style={{ height: "100dvh", display: "flex", flexDirection: "column", paddingTop: 64 }}>
 			<TopNav />
@@ -127,12 +168,12 @@ export default function RoutePage() {
 			{/* Header */}
 			<div
 				style={{
-					height: 52,
+					minHeight: 52,
 					background: "var(--cc-bg)",
 					borderBottom: "1px solid var(--cc-border)",
 					display: "flex",
 					alignItems: "center",
-					padding: "0 16px",
+					padding: "8px 16px",
 					gap: 8,
 					flexShrink: 0,
 					zIndex: 20
@@ -140,115 +181,235 @@ export default function RoutePage() {
 				<Text fw={700} size="sm" style={{ flex: 1, fontFamily: "'Big Shoulders Display', sans-serif" }}>
 					Optimized Route
 				</Text>
-				{computing ? (
-					<Loader color="gold" size="xs" />
-				) : (
+				{optimized && (
 					<Badge color="gold" variant="filled" size="sm">
-						{orderedStops.length} stop{orderedStops.length === 1 ? "" : "s"}
+						{optimized.order.length} stop{optimized.order.length === 1 ? "" : "s"} · {optimized.totalKm.toFixed(1)} km
 					</Badge>
 				)}
 			</div>
 
 			{/* Map */}
-			<div style={{ height: "45%", overflow: "hidden", position: "relative", flexShrink: 0 }}>
+			<div style={{ height: "40%", overflow: "hidden", position: "relative", flexShrink: 0 }}>
 				<ResponderMap
-					reports={orderedStops}
-					onReportClick={setSelectedReport}
-					navigationTarget={route.length > 0 ? { report: orderedStops[0], route } : null}
+					reports={optimized ? optimized.order : selectedStops}
+					onReportClick={() => {}}
+					navigationTarget={navTarget}
 					onUserPosition={setUserPos}
 				/>
 			</div>
 
-			{/* Ordered stop list */}
+			{/* Controls + list */}
 			<ScrollArea style={{ flex: 1 }}>
 				<Stack gap={0} px={16} pt={12} pb={24}>
-					{!userPos && (
-						<Text size="sm" c="dimmed" ta="center" py={40}>
-							Waiting for your location…
-						</Text>
+					{error && (
+						<Alert icon={<IconAlertCircle size={16} />} color="red" variant="light" radius="md" mb={10}>
+							{error}
+						</Alert>
 					)}
-					{userPos && orderedStops.length === 0 && (
-						<Text size="sm" c="dimmed" ta="center" py={40}>
-							No active reports to route
-						</Text>
+					{!error && failedCount > 0 && (
+						<Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light" radius="md" mb={10}>
+							{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
+						</Alert>
 					)}
-					{orderedStops.map((stop, i) => (
-						<button
-							key={stop.id}
-							onClick={() => setSelectedReport(stop)}
-							style={{
-								width: "100%",
-								background: "var(--cc-panel)",
-								border: "1px solid var(--cc-border)",
-								borderRadius: 12,
-								padding: "14px 12px",
-								marginBottom: 10,
-								cursor: "pointer",
-								textAlign: "left",
-								display: "flex",
-								alignItems: "flex-start",
-								gap: 12
-							}}>
-							<div
-								style={{
-									width: 22,
-									height: 22,
-									borderRadius: "50%",
-									background: "var(--cc-accent)",
-									color: "#151515",
-									fontSize: 11,
-									fontWeight: 700,
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "center",
-									flexShrink: 0,
-									marginTop: 1
-								}}>
-								{i + 1}
-							</div>
 
-							<div style={{ flex: 1, minWidth: 0 }}>
-								<Group justify="space-between" mb={4} wrap="nowrap">
-									<Text
-										fw={600}
-										size="sm"
-										style={{
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap",
-											flex: 1
-										}}>
-										{stop.title}
-									</Text>
-									<Badge color={URGENCY_COLORS[stop.urgency]} variant="light" size="xs">
-										{stop.urgency}
-									</Badge>
-								</Group>
-								<Group gap={4}>
-									<IconMapPin size={12} color="var(--cc-text-muted)" />
-									<Text
-										size="xs"
-										c="dimmed"
-										style={{
-											overflow: "hidden",
-											textOverflow: "ellipsis",
-											whiteSpace: "nowrap"
-										}}>
-										{stop.address}
-									</Text>
-								</Group>
-							</div>
-						</button>
-					))}
+					{loading && (
+						<Group justify="center" py={30}>
+							<Loader color="gold" size="sm" />
+						</Group>
+					)}
+
+					{!loading && !error && activeReports.length === 0 && (
+						<Text size="sm" c="dimmed" ta="center" py={30}>
+							No active assignments to route
+						</Text>
+					)}
+
+					{!loading && activeReports.length > 0 && (
+						<>
+							<Group justify="space-between" mb={8}>
+								<Checkbox
+									label="Select all"
+									color="gold"
+									checked={allSelected}
+									indeterminate={selectedIds.size > 0 && !allSelected}
+									onChange={toggleAll}
+									styles={{ label: { fontWeight: 600, fontSize: 13 } }}
+								/>
+								<Text size="xs" c="dimmed">
+									{selectedIds.size} selected
+								</Text>
+							</Group>
+
+							{!userPos && selectedIds.size > 0 && (
+								<Alert color="yellow" variant="light" radius="md" mb={10} icon={<IconMapPin size={16} />}>
+									Waiting for your location to compute the route…
+								</Alert>
+							)}
+
+							{/* Google Maps hand-off */}
+							{optimized && mapsLegs.length > 0 && (
+								<Stack gap={8} mb={12}>
+									{mapsLegs.length > 1 && (
+										<Text size="xs" c="dimmed">
+											Google Maps limits stops per link, so this route is split into {mapsLegs.length} legs.
+										</Text>
+									)}
+									{mapsLegs.map((leg, i) => (
+										<div
+											key={i}
+											style={{
+												background: "var(--cc-panel)",
+												border: "1px solid var(--cc-border)",
+												borderRadius: 10,
+												padding: "10px 12px"
+											}}>
+											<Group justify="space-between" mb={6}>
+												<Text size="xs" fw={600}>
+													{mapsLegs.length > 1 ? `Leg ${i + 1}: stops ${leg.fromStop}–${leg.toStop}` : "Full route"}
+												</Text>
+											</Group>
+											<Group gap={6} wrap="nowrap">
+												<Button
+													component="a"
+													href={leg.url}
+													target="_blank"
+													rel="noopener noreferrer"
+													size="xs"
+													color="gold"
+													radius="xl"
+													leftSection={<IconExternalLink size={14} />}
+													style={{ flex: 1 }}>
+													Open
+												</Button>
+												<CopyButton value={leg.url}>
+													{({ copied, copy }) => (
+														<Button
+															size="xs"
+															variant="light"
+															color={copied ? "green" : "gold"}
+															radius="xl"
+															onClick={copy}
+															leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+															style={{ flex: 1 }}>
+															{copied ? "Copied" : "Copy"}
+														</Button>
+													)}
+												</CopyButton>
+												<ActionIcon
+													variant="light"
+													color="gold"
+													radius="xl"
+													size="lg"
+													onClick={() => setQrLeg(leg)}
+													aria-label="Show QR code">
+													<IconQrcode size={16} />
+												</ActionIcon>
+											</Group>
+										</div>
+									))}
+								</Stack>
+							)}
+
+							{/* Ordered / selectable stop list */}
+							<Stack gap={8}>
+								{activeReports.map(report => {
+									const orderIndex = optimized
+										? optimized.order.findIndex(s => s.id === report.id)
+										: -1;
+									const checked = selectedIds.has(report.id);
+									return (
+										<div
+											key={report.id}
+											style={{
+												background: "var(--cc-panel)",
+												border: "1px solid var(--cc-border)",
+												borderRadius: 12,
+												padding: "12px",
+												display: "flex",
+												alignItems: "flex-start",
+												gap: 10
+											}}>
+											<Checkbox
+												color="gold"
+												checked={checked}
+												onChange={() => toggle(report.id)}
+												mt={2}
+											/>
+											{orderIndex >= 0 && (
+												<div
+													style={{
+														width: 22,
+														height: 22,
+														borderRadius: "50%",
+														background: "var(--cc-accent)",
+														color: "#151515",
+														fontSize: 11,
+														fontWeight: 700,
+														display: "flex",
+														alignItems: "center",
+														justifyContent: "center",
+														flexShrink: 0,
+														marginTop: 1
+													}}>
+													{orderIndex + 1}
+												</div>
+											)}
+											<div style={{ flex: 1, minWidth: 0 }}>
+												<Group justify="space-between" mb={4} wrap="nowrap">
+													<Text
+														fw={600}
+														size="sm"
+														style={{
+															overflow: "hidden",
+															textOverflow: "ellipsis",
+															whiteSpace: "nowrap",
+															flex: 1
+														}}>
+														{report.title}
+													</Text>
+													<Badge color={URGENCY_COLORS[report.urgency]} variant="light" size="xs">
+														{report.priority}
+													</Badge>
+												</Group>
+												<Group gap={4}>
+													<IconMapPin size={12} color="var(--cc-text-muted)" />
+													<Text
+														size="xs"
+														c="dimmed"
+														style={{
+															overflow: "hidden",
+															textOverflow: "ellipsis",
+															whiteSpace: "nowrap"
+														}}>
+														{report.address}
+													</Text>
+												</Group>
+											</div>
+										</div>
+									);
+								})}
+							</Stack>
+						</>
+					)}
 				</Stack>
 			</ScrollArea>
 
-			<ReportDetailDrawer
-				report={selectedReport}
-				onClose={() => setSelectedReport(null)}
-				onNavigate={handleNavigate}
-				onMarkAttended={handleMarkAttended}
-			/>
+			<Modal
+				opened={!!qrLeg}
+				onClose={() => setQrLeg(null)}
+				title="Scan to open in Google Maps"
+				centered
+				radius="md"
+				styles={{ content: { background: "var(--cc-panel)" } }}>
+				{qrLeg && (
+					<Stack gap={12} align="center">
+						<QrCanvas url={qrLeg.url} />
+						<Text size="xs" c="dimmed" ta="center">
+							Point your phone camera at the code to open the directions.
+						</Text>
+					</Stack>
+				)}
+			</Modal>
 		</div>
 	);
 }

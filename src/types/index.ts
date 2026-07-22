@@ -1,3 +1,11 @@
+import type {
+	AssignmentStatus,
+	AssignmentPriority,
+	NatureOfCrisis,
+	InfrastructureType,
+	DamageLevel
+} from "@/lib/api";
+
 export type Urgency = "low" | "medium" | "high" | "critical";
 export type ReportStatus = "assigned" | "attended";
 
@@ -30,40 +38,32 @@ export const DISASTER_COLORS: Record<DisasterType, string> = {
 	Other: "#607D8B"
 };
 
-export interface SurveyData {
-	infrastructureTypes: string[];
-	description: string;
-	damageLevel: string;
-	debrisPresent: boolean;
-	affectedCount: number;
-}
-
+/**
+ * View model for one assignment joined with its crisis report. Every field
+ * traces to a real backend field (see src/lib/api.ts for the raw shapes) —
+ * no fabricated data. `title` / `urgency` / `disasterType` / `status` are
+ * display derivations of priority, nature_of_crisis, and assignment status.
+ */
 export interface CrisisReport {
-	id: string;
-	title: string;
+	id: string; // assignment_id
+	reportId: string;
+	title: string; // "<Nature Of Crisis> — <Infrastructure Type>"
 	location: { lat: number; lng: number };
-	address: string;
-	reportedAt: string;
-	urgency: Urgency;
-	disasterType: DisasterType;
-	status: ReportStatus;
-	attendedAt?: string;
+	address: string; // location_description, or "Unknown location"
+	reportedAt: string; // submitted_at, falling back to assigned_at
+	assignedAt: string;
+	dueDate: string | null;
+	urgency: Urgency; // from assignment priority
+	priority: AssignmentPriority;
+	disasterType: DisasterType; // mapped from nature_of_crisis (for colors)
+	natureOfCrisis: NatureOfCrisis | "" | null;
+	infrastructureType: InfrastructureType | "" | null;
+	damageLevel: DamageLevel | "" | null;
+	debris: boolean;
+	affectedUnits: number | null;
+	photoUrl: string | null;
+	status: ReportStatus; // completed → attended, everything else → assigned
+	assignmentStatus: AssignmentStatus;
+	attendedAt?: string; // completed_at when set
 	notes?: string;
-	survey: SurveyData;
-	images: string[];
-	reporter: string;
-}
-
-export interface Responder {
-	id: string;
-	name: string;
-	badge: string;
-	department: string;
-	phone: string;
-	email: string;
-	stats: {
-		reportsAttended: number;
-		avgResponseTime: string;
-		activeReports: number;
-	};
 }

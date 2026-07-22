@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
 	Text,
@@ -7,18 +7,31 @@ import {
 	Group,
 	ScrollArea,
 	Loader,
-	SegmentedControl
+	SegmentedControl,
+	Select,
+	Alert
 } from "@mantine/core";
 import {
 	IconMapPin,
 	IconClock,
 	IconChevronRight,
-	IconCircleCheck
+	IconCircleCheck,
+	IconAlertCircle,
+	IconArrowsSort
 } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 import { CrisisReport } from "@/types";
+import { label } from "@/lib/api";
+import { useResponderReports } from "@/lib/useResponderReports";
+import { useGeolocation } from "@/lib/useGeolocation";
+import { haversineKm } from "@/utils/routing";
 import ReportDetailDrawer from "@/components/ReportDetailDrawer";
 import TopNav from "@/components/TopNav";
+
+function formatDistance(km: number): string {
+	if (km < 1) return `${Math.round(km * 1000)} m away`;
+	return `${km.toFixed(1)} km away`;
+}
 
 const URGENCY_COLORS: Record<string, string> = {
 	critical: "red",
@@ -29,59 +42,45 @@ const URGENCY_COLORS: Record<string, string> = {
 
 function formatRelative(iso: string) {
 	const diff = Date.now() - new Date(iso).getTime();
-	const h = Math.floor(diff / 3600000);
+	const d = Math.floor(diff / 86400000);
+	const h = Math.floor((diff % 86400000) / 3600000);
 	const m = Math.floor((diff % 3600000) / 60000);
+	if (d > 0) return `${d}d ${h}h ago`;
 	if (h > 0) return `${h}h ${m}m ago`;
 	return `${m}m ago`;
 }
 
+type StatusFilter = "all" | "assigned" | "attended";
+type DamageFilter = "all" | "minimal" | "partial" | "complete";
+type SortOrder = "newest" | "oldest";
+
 export default function ReportsPage() {
 	const { responder, isLoading } = useAuth();
 	const router = useRouter();
-	const [reports, setReports] = useState<CrisisReport[]>([]);
-	const [filter, setFilter] = useState<"all" | "assigned" | "attended">("all");
-	const [selectedReport, setSelectedReport] = useState<CrisisReport | null>(
-		null
-	);
+	const { reports, loading, error, failedCount, markAttended } = useResponderReports();
+	const userPos = useGeolocation();
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+	const [damageFilter, setDamageFilter] = useState<DamageFilter>("all");
+	const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
+	const [selectedReport, setSelectedReport] = useState<CrisisReport | null>(null);
 
 	useEffect(() => {
 		if (!isLoading && !responder) router.replace("/login");
 	}, [responder, isLoading, router]);
 
-	useEffect(() => {
-		if (!responder) return;
-		fetch("/api/reports")
-			.then(res => res.json())
-			.then(setReports)
-			.catch(err => console.error("Failed to load reports:", err));
-	}, [responder]);
-
 	const handleNavigate = useCallback((_report: CrisisReport) => {
 		router.push("/map");
 	}, [router]);
 
-	const handleMarkAttended = useCallback(
-		(report: CrisisReport, notes: string) => {
-			setReports(prev =>
-				prev.map(r =>
-					r.id === report.id
-						? {
-								...r,
-								status: "attended" as const,
-								attendedAt: new Date().toISOString(),
-								notes
-							}
-						: r
-				)
-			);
-			fetch(`/api/reports/${report.id}`, {
-				method: "PATCH",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ notes })
-			}).catch(err => console.error("Failed to mark report attended:", err));
-		},
-		[]
-	);
+	const visible = useMemo(() => {
+		let list = reports;
+		if (statusFilter !== "all") list = list.filter(r => r.status === statusFilter);
+		if (damageFilter !== "all") list = list.filter(r => r.damageLevel === damageFilter);
+		return [...list].sort((a, b) => {
+			const d = new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime();
+			return sortOrder === "newest" ? d : -d;
+		});
+	}, [reports, statusFilter, damageFilter, sortOrder]);
 
 	if (isLoading || !responder) {
 		return (
@@ -97,9 +96,6 @@ export default function ReportsPage() {
 			</div>
 		);
 	}
-
-	const visible =
-		filter === "all" ? reports : reports.filter(r => r.status === filter);
 
 	return (
 		<div
@@ -128,8 +124,8 @@ export default function ReportsPage() {
 					size="xs"
 					radius="xl"
 					color="gold"
-					value={filter}
-					onChange={v => setFilter(v as typeof filter)}
+					value={statusFilter}
+					onChange={v => setStatusFilter(v as StatusFilter)}
 					data={[
 						{ label: "All", value: "all" },
 						{ label: "Active", value: "assigned" },
@@ -139,14 +135,74 @@ export default function ReportsPage() {
 						root: { background: "var(--cc-panel)" }
 					}}
 				/>
+				<Group gap={8} mt={10} wrap="nowrap">
+					<Select
+						size="xs"
+						radius="xl"
+						value={damageFilter}
+						onChange={v => setDamageFilter((v ?? "all") as DamageFilter)}
+						data={[
+							{ value: "all", label: "All damage levels" },
+							{ value: "minimal", label: "Minimal" },
+							{ value: "partial", label: "Partial" },
+							{ value: "complete", label: "Complete" }
+						]}
+						style={{ flex: 1 }}
+						comboboxProps={{ withinPortal: true }}
+						styles={{
+							input: { background: "var(--cc-panel)", borderColor: "var(--cc-border)", color: "var(--cc-text)" }
+						}}
+					/>
+					<Select
+						size="xs"
+						radius="xl"
+						value={sortOrder}
+						onChange={v => setSortOrder((v ?? "newest") as SortOrder)}
+						leftSection={<IconArrowsSort size={13} />}
+						data={[
+							{ value: "newest", label: "Newest first" },
+							{ value: "oldest", label: "Oldest first" }
+						]}
+						style={{ flex: 1 }}
+						comboboxProps={{ withinPortal: true }}
+						styles={{
+							input: { background: "var(--cc-panel)", borderColor: "var(--cc-border)", color: "var(--cc-text)" }
+						}}
+					/>
+				</Group>
 			</div>
 
 			{/* List */}
 			<ScrollArea style={{ flex: 1 }}>
 				<Stack gap={0} px={16} pt={12} pb={24}>
-					{visible.length === 0 && (
+					{error && (
+						<Alert
+							icon={<IconAlertCircle size={16} />}
+							color="red"
+							variant="light"
+							radius="md"
+							mb={10}>
+							{error}
+						</Alert>
+					)}
+					{!error && failedCount > 0 && (
+						<Alert
+							icon={<IconAlertCircle size={16} />}
+							color="yellow"
+							variant="light"
+							radius="md"
+							mb={10}>
+							{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
+						</Alert>
+					)}
+					{loading && (
+						<Group justify="center" py={40}>
+							<Loader color="gold" size="sm" />
+						</Group>
+					)}
+					{!loading && !error && visible.length === 0 && (
 						<Text size="sm" c="dimmed" ta="center" py={40}>
-							No reports in this category
+							{reports.length === 0 ? "No assignments yet" : "No reports match these filters"}
 						</Text>
 					)}
 					{visible.map(report => (
@@ -200,11 +256,16 @@ export default function ReportsPage() {
 										{report.title}
 									</Text>
 									<Group gap={4} style={{ flexShrink: 0 }}>
+										{report.damageLevel && (
+											<Badge color="gray" variant="outline" size="xs">
+												{label(report.damageLevel)}
+											</Badge>
+										)}
 										<Badge
 											color={URGENCY_COLORS[report.urgency]}
 											variant="light"
 											size="xs">
-											{report.urgency}
+											{report.priority}
 										</Badge>
 										{report.status === "attended" && (
 											<IconCircleCheck size={14} color="#22c55e" />
@@ -226,11 +287,19 @@ export default function ReportsPage() {
 									</Text>
 								</Group>
 
-								<Group gap={4}>
+								<Group gap={4} wrap="nowrap">
 									<IconClock size={12} color="var(--cc-text-muted)" />
 									<Text size="xs" c="dimmed">
 										{formatRelative(report.reportedAt)}
 									</Text>
+									{userPos && (
+										<>
+											<Text size="xs" c="dimmed">·</Text>
+											<Text size="xs" c="dimmed">
+												{formatDistance(haversineKm(userPos, [report.location.lat, report.location.lng]))}
+											</Text>
+										</>
+									)}
 								</Group>
 							</div>
 
@@ -244,7 +313,7 @@ export default function ReportsPage() {
 				report={selectedReport}
 				onClose={() => setSelectedReport(null)}
 				onNavigate={handleNavigate}
-				onMarkAttended={handleMarkAttended}
+				onMarkAttended={markAttended}
 			/>
 		</div>
 	);

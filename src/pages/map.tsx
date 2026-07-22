@@ -1,12 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import dynamic from "next/dynamic";
-import { Text, ActionIcon, Loader, Group, Stack } from "@mantine/core";
-import { IconX, IconNavigation, IconCircleCheck } from "@tabler/icons-react";
+import { Text, ActionIcon, Loader, Group, Stack, Alert, Button } from "@mantine/core";
+import { IconX, IconNavigation, IconCircleCheck, IconAlertCircle } from "@tabler/icons-react";
 import { useAuth } from "@/context/AuthContext";
 import { CrisisReport, DISASTER_COLORS } from "@/types";
 import { DisasterGlyph } from "@/components/icons";
 import { fetchRoute, NavigationTarget } from "@/utils/routing";
+import { useResponderReports } from "@/lib/useResponderReports";
+import * as api from "@/lib/api";
 import ReportDetailDrawer from "@/components/ReportDetailDrawer";
 import TopNav from "@/components/TopNav";
 
@@ -63,32 +65,73 @@ function StatusChip({ color, label, count }: { color: string; label: string; cou
 
 function formatFeedTime(iso: string) {
 	const diff = Date.now() - new Date(iso).getTime();
-	const h = Math.floor(diff / 3600000);
+	const d = Math.floor(diff / 86400000);
+	const h = Math.floor((diff % 86400000) / 3600000);
 	const m = Math.floor((diff % 3600000) / 60000);
+	if (d > 0) return `${d}d ago`;
 	if (h > 0) return `${h}h ago`;
 	if (m > 0) return `${m}m ago`;
 	return "just now";
 }
 
+// Average of (completed_at − assigned_at) over assignments where both exist.
+// Returns null when no assignment has a usable pair — the card is omitted then.
+function avgResponseTime(reports: CrisisReport[]): string | null {
+	const deltas = reports
+		.filter(r => r.attendedAt)
+		.map(r => new Date(r.attendedAt!).getTime() - new Date(r.assignedAt).getTime())
+		.filter(ms => ms > 0);
+	if (deltas.length === 0) return null;
+	const avgMs = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+	const h = Math.floor(avgMs / 3600000);
+	const m = Math.round((avgMs % 3600000) / 60000);
+	return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+const LOCATION_PATCH_INTERVAL_MS = 60_000;
+
 export default function MapPage() {
 	const { responder, isLoading } = useAuth();
 	const router = useRouter();
-	const [reports, setReports] = useState<CrisisReport[]>([]);
 	const [selectedReport, setSelectedReport] = useState<CrisisReport | null>(null);
 	const [navTarget, setNavTarget] = useState<NavigationTarget | null>(null);
 	const [userPos, setUserPos] = useState<[number, number] | null>(null);
+	const lastLocationPatch = useRef(0);
+
+	// Fire a browser notification when polling surfaces assignments that
+	// weren't in the previous fetch (never on the first load).
+	const notifyNew = useCallback((fresh: CrisisReport[]) => {
+		if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+		const title = fresh.length === 1 ? "New report assigned" : `${fresh.length} new reports assigned`;
+		const body = fresh.map(r => r.title).slice(0, 3).join("\n");
+		new Notification(title, { body });
+	}, []);
+
+	const { reports, loading, error, failedCount, markAttended } = useResponderReports({
+		onNewAssignments: notifyNew
+	});
 
 	useEffect(() => {
 		if (!isLoading && !responder) router.replace("/login");
 	}, [responder, isLoading, router]);
 
+	// Ask for notification permission once, after login.
 	useEffect(() => {
-		if (!responder) return;
-		fetch("/api/reports")
-			.then(res => res.json())
-			.then(setReports)
-			.catch(err => console.error("Failed to load reports:", err));
+		if (!responder || typeof Notification === "undefined") return;
+		if (Notification.permission === "default") Notification.requestPermission().catch(() => {});
 	}, [responder]);
+
+	// Push the responder's live position to the backend (lat/lon are writable
+	// on PATCH /api/responders/{id}/ — verified via OPTIONS). Throttled; a
+	// failure here is non-critical so it only logs.
+	useEffect(() => {
+		if (!responder || !userPos) return;
+		const now = Date.now();
+		if (now - lastLocationPatch.current < LOCATION_PATCH_INTERVAL_MS) return;
+		lastLocationPatch.current = now;
+		api.updateResponderLocation(responder.responder_id, userPos[0], userPos[1])
+			.catch(err => console.warn("Failed to update responder location:", err));
+	}, [responder, userPos]);
 
 	const handleNavigate = useCallback(
 		async (report: CrisisReport) => {
@@ -98,29 +141,6 @@ export default function MapPage() {
 			setNavTarget({ report, route });
 		},
 		[userPos]
-	);
-
-	const handleMarkAttended = useCallback(
-		(report: CrisisReport, notes: string) => {
-			setReports(prev =>
-				prev.map(r =>
-					r.id === report.id
-						? {
-								...r,
-								status: "attended" as const,
-								attendedAt: new Date().toISOString(),
-								notes
-							}
-						: r
-				)
-			);
-			fetch(`/api/reports/${report.id}`, {
-				method: "PATCH",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ notes })
-			}).catch(err => console.error("Failed to mark report attended:", err));
-		},
-		[]
 	);
 
 	if (isLoading || !responder) {
@@ -140,6 +160,7 @@ export default function MapPage() {
 
 	const activeCount = reports.filter(r => r.status === "assigned").length;
 	const attendedCount = reports.filter(r => r.status === "attended").length;
+	const avgResp = avgResponseTime(reports);
 
 	const feedItems = reports
 		.flatMap(r => {
@@ -161,11 +182,32 @@ export default function MapPage() {
 			<div className="mapSplit">
 				{/* Left: stats + map + status strip */}
 				<div className="mapCol">
+					{error && (
+						<Alert
+							icon={<IconAlertCircle size={16} />}
+							color="red"
+							variant="light"
+							radius={0}
+							styles={{ root: { flexShrink: 0 } }}>
+							{error}
+						</Alert>
+					)}
+					{!error && failedCount > 0 && (
+						<Alert
+							icon={<IconAlertCircle size={16} />}
+							color="yellow"
+							variant="light"
+							radius={0}
+							styles={{ root: { flexShrink: 0 } }}>
+							{failedCount} assignment{failedCount === 1 ? "" : "s"} could not load report details
+						</Alert>
+					)}
+
 					<Group gap={8} px={16} py={12} wrap="nowrap" style={{ flexShrink: 0 }}>
-						<StatCard label="Total" value={String(reports.length)} />
-						<StatCard label="Active" value={String(activeCount)} color="#ef4444" />
-						<StatCard label="Attended" value={String(attendedCount)} color="#4caf6a" />
-						<StatCard label="Avg. Resp." value={responder.stats.avgResponseTime} color="var(--cc-accent)" />
+						<StatCard label="Total" value={loading ? "—" : String(reports.length)} />
+						<StatCard label="Active" value={loading ? "—" : String(activeCount)} color="#ef4444" />
+						<StatCard label="Attended" value={loading ? "—" : String(attendedCount)} color="#4caf6a" />
+						{avgResp && <StatCard label="Avg. Resp." value={avgResp} color="var(--cc-accent)" />}
 					</Group>
 
 					{navTarget && (
@@ -221,13 +263,13 @@ export default function MapPage() {
 									width: 7,
 									height: 7,
 									borderRadius: "50%",
-									background: "#4caf6a",
+									background: error ? "#ef4444" : "#4caf6a",
 									flexShrink: 0,
-									boxShadow: "0 0 0 3px rgba(76,175,106,0.25)"
+									boxShadow: `0 0 0 3px ${error ? "rgba(239,68,68,0.25)" : "rgba(76,175,106,0.25)"}`
 								}}
 							/>
-							<Text size="11px" fw={700} style={{ color: "#4caf6a", letterSpacing: 0.5 }}>
-								LIVE
+							<Text size="11px" fw={700} style={{ color: error ? "#ef4444" : "#4caf6a", letterSpacing: 0.5 }}>
+								{error ? "OFFLINE" : "LIVE"}
 							</Text>
 						</Group>
 						<StatusChip color="var(--cc-text-muted)" label="ALL" count={reports.length} />
@@ -242,9 +284,19 @@ export default function MapPage() {
 						<Text size="xs" fw={700} tt="uppercase" mb={8} style={{ color: "var(--cc-text-muted)", letterSpacing: 0.4 }}>
 							Live Feed
 						</Text>
-						{feedItems.length === 0 && (
+						{loading && (
+							<Group justify="center" py={24}>
+								<Loader color="gold" size="sm" />
+							</Group>
+						)}
+						{!loading && !error && feedItems.length === 0 && (
 							<Text size="sm" c="dimmed" ta="center" py={24}>
-								No activity yet
+								No assignments yet
+							</Text>
+						)}
+						{!loading && error && feedItems.length === 0 && (
+							<Text size="sm" c="red" ta="center" py={24}>
+								Could not load assignments
 							</Text>
 						)}
 						{feedItems.map(item => (
@@ -304,7 +356,7 @@ export default function MapPage() {
 					handleNavigate(report);
 					setSelectedReport(null);
 				}}
-				onMarkAttended={handleMarkAttended}
+				onMarkAttended={markAttended}
 			/>
 
 			<style jsx>{`

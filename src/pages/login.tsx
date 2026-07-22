@@ -16,19 +16,18 @@ export default function LoginPage() {
 	const router = useRouter();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
-	const [error, setError] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setLoading(true);
-		setError(false);
-		await new Promise(r => setTimeout(r, 600)); // simulate network
-		const ok = login(email.trim(), password);
-		if (ok) {
+		setError(null);
+		try {
+			await login(email.trim(), password);
 			router.push("/map");
-		} else {
-			setError(true);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Login failed. Please try again.");
 			setLoading(false);
 		}
 	};
@@ -108,7 +107,7 @@ export default function LoginPage() {
 									color="red"
 									variant="light"
 									radius="md">
-									Invalid credentials. Please try again.
+									{error}
 								</Alert>
 							)}
 
@@ -151,13 +150,6 @@ export default function LoginPage() {
 						</Stack>
 					</form>
 
-					<Text size="xs" c="dimmed" ta="center" mt={28}>
-						Demo credentials:{" "}
-						<Text span fw={500}>
-							j.odhiambo@nairobi.go.ke
-						</Text>{" "}
-						/ <Text span fw={500}>responder123</Text>
-					</Text>
 				</div>
 			</div>
 		</div>

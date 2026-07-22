@@ -9,21 +9,20 @@ import {
 	Textarea,
 	Modal,
 	ScrollArea,
-	Tabs,
 	Divider,
 	ActionIcon
 } from "@mantine/core";
 import {
 	IconMapPin,
 	IconClock,
-	IconUser,
-	IconAlertTriangle,
 	IconCircleCheck,
 	IconNavigation,
-	IconX,
-	IconPhoto
+	IconBrandGoogleMaps,
+	IconX
 } from "@tabler/icons-react";
 import { CrisisReport } from "@/types";
+import { label } from "@/lib/api";
+import { singleDestinationUrl } from "@/utils/routing";
 
 const URGENCY_COLORS: Record<string, string> = {
 	critical: "red",
@@ -37,6 +36,22 @@ function formatTime(iso: string) {
 		dateStyle: "medium",
 		timeStyle: "short"
 	});
+}
+
+function FieldRow({ name, value }: { name: string; value: React.ReactNode }) {
+	return (
+		<>
+			<Group justify="space-between" wrap="nowrap" gap={12}>
+				<Text size="sm" fw={500} style={{ flexShrink: 0 }}>
+					{name}
+				</Text>
+				<Text size="sm" ta="right" style={{ minWidth: 0 }}>
+					{value}
+				</Text>
+			</Group>
+			<Divider color="var(--cc-border)" />
+		</>
+	);
 }
 
 interface ReportDetailDrawerProps {
@@ -98,13 +113,11 @@ export default function ReportDetailDrawer({
 								variant="filled"
 								size="sm"
 								tt="uppercase">
-								{report.urgency}
+								{report.priority}
 							</Badge>
-							{isAttended && (
-								<Badge color="gray" variant="light" size="sm">
-									Attended
-								</Badge>
-							)}
+							<Badge color={isAttended ? "gray" : "gold"} variant="light" size="sm">
+								{label(report.assignmentStatus)}
+							</Badge>
 						</Group>
 						<ActionIcon
 							variant="subtle"
@@ -136,146 +149,58 @@ export default function ReportDetailDrawer({
 				</div>
 
 				<ScrollArea style={{ height: "calc(100% - 220px)" }} px={16} py={12}>
-					<Tabs defaultValue="overview" color="gold">
-						<Tabs.List grow mb={12}>
-							<Tabs.Tab value="overview">Overview</Tabs.Tab>
-							<Tabs.Tab value="survey">Survey</Tabs.Tab>
-							<Tabs.Tab value="images" leftSection={<IconPhoto size={14} />}>
-								Images ({report.images.length})
-							</Tabs.Tab>
-						</Tabs.List>
+					<Stack gap={10}>
+						{report.photoUrl && (
+							<img
+								src={report.photoUrl}
+								alt="Report photo"
+								style={{
+									width: "100%",
+									aspectRatio: "4/3",
+									objectFit: "cover",
+									borderRadius: 8,
+									display: "block"
+								}}
+							/>
+						)}
 
-						{/* Overview */}
-						<Tabs.Panel value="overview">
-							<Stack gap={12}>
-								<Group gap={8}>
-									<IconUser size={16} color="var(--cc-text-muted)" />
-									<Text size="sm">
-										<Text span fw={500}>
-											Reporter:
-										</Text>{" "}
-										{report.reporter}
-									</Text>
-								</Group>
+						<FieldRow name="Nature of crisis" value={label(report.natureOfCrisis)} />
+						<FieldRow name="Damage level" value={label(report.damageLevel)} />
+						<FieldRow name="Infrastructure" value={label(report.infrastructureType)} />
+						<FieldRow
+							name="Debris present"
+							value={
+								<Badge color={report.debris ? "red" : "green"} variant="light" size="sm">
+									{report.debris ? "Yes" : "No"}
+								</Badge>
+							}
+						/>
+						<FieldRow
+							name="Affected units"
+							value={report.affectedUnits ?? "Not recorded"}
+						/>
+						<FieldRow name="Assigned" value={formatTime(report.assignedAt)} />
+						{report.dueDate && (
+							<FieldRow name="Due" value={formatTime(report.dueDate)} />
+						)}
+						{report.attendedAt && (
+							<FieldRow name="Completed" value={formatTime(report.attendedAt)} />
+						)}
 
-								<Group gap={8}>
-									<IconAlertTriangle size={16} color="var(--cc-text-muted)" />
-									<Text size="sm">
-										<Text span fw={500}>
-											Damage:
-										</Text>{" "}
-										{report.survey.damageLevel}
-									</Text>
-								</Group>
-
-								<Group gap={8}>
-									<IconUser size={16} color="var(--cc-text-muted)" />
-									<Text size="sm">
-										<Text span fw={500}>
-											People affected:
-										</Text>{" "}
-										~{report.survey.affectedCount}
-									</Text>
-								</Group>
-
-								<div>
-									<Text size="sm" fw={500} mb={6}>
-										Infrastructure types
-									</Text>
-									<Group gap={6}>
-										{report.survey.infrastructureTypes.map(t => (
-											<Badge key={t} color="gold" variant="light" size="sm">
-												{t}
-											</Badge>
-										))}
-									</Group>
-								</div>
-
-								{isAttended && report.notes && (
-									<div
-										style={{
-											background: "var(--cc-hover)",
-											borderRadius: 8,
-											padding: "10px 12px"
-										}}>
-										<Text size="xs" fw={600} mb={4}>
-											Responder Notes
-										</Text>
-										<Text size="sm">{report.notes}</Text>
-									</div>
-								)}
-							</Stack>
-						</Tabs.Panel>
-
-						{/* Survey */}
-						<Tabs.Panel value="survey">
-							<Stack gap={14}>
-								<div>
-									<Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4}>
-										Description
-									</Text>
-									<Text size="sm">{report.survey.description}</Text>
-								</div>
-								<Divider color="var(--cc-border)" />
-								<Group justify="space-between">
-									<Text size="sm" fw={500}>
-										Debris present
-									</Text>
-									<Badge
-										color={report.survey.debrisPresent ? "red" : "green"}
-										variant="light"
-										size="sm">
-										{report.survey.debrisPresent ? "Yes" : "No"}
-									</Badge>
-								</Group>
-								<Divider color="var(--cc-border)" />
-								<Group justify="space-between">
-									<Text size="sm" fw={500}>
-										Damage level
-									</Text>
-									<Text size="sm">{report.survey.damageLevel}</Text>
-								</Group>
-								<Divider color="var(--cc-border)" />
-								<Group justify="space-between">
-									<Text size="sm" fw={500}>
-										Affected people
-									</Text>
-									<Text size="sm">{report.survey.affectedCount}</Text>
-								</Group>
-							</Stack>
-						</Tabs.Panel>
-
-						{/* Images */}
-						<Tabs.Panel value="images">
-							{report.images.length === 0 ? (
-								<Text size="sm" c="dimmed" ta="center" py={24}>
-									No images attached
+						{report.notes && (
+							<div
+								style={{
+									background: "var(--cc-hover)",
+									borderRadius: 8,
+									padding: "10px 12px"
+								}}>
+								<Text size="xs" fw={600} mb={4}>
+									Notes
 								</Text>
-							) : (
-								<div
-									style={{
-										display: "grid",
-										gridTemplateColumns: "1fr 1fr",
-										gap: 8
-									}}>
-									{report.images.map((src, i) => (
-										<img
-											key={i}
-											src={src}
-											alt={`Report image ${i + 1}`}
-											style={{
-												width: "100%",
-												aspectRatio: "4/3",
-												objectFit: "cover",
-												borderRadius: 8,
-												display: "block"
-											}}
-										/>
-									))}
-								</div>
-							)}
-						</Tabs.Panel>
-					</Tabs>
+								<Text size="sm">{report.notes}</Text>
+							</div>
+						)}
+					</Stack>
 				</ScrollArea>
 
 				{/* Footer actions */}
@@ -283,34 +208,48 @@ export default function ReportDetailDrawer({
 					style={{
 						padding: "12px 16px",
 						background: "var(--cc-panel)",
-						borderTop: "1px solid #e5e3db",
+						borderTop: "1px solid var(--cc-border)",
 						position: "sticky",
 						bottom: 0
 					}}>
-					<Group gap={8}>
-						<Button
-							leftSection={<IconNavigation size={16} />}
-							variant="outline"
-							color="gold"
-							radius="xl"
-							style={{ flex: 1 }}
-							onClick={() => {
-								onNavigate(report);
-								onClose();
-							}}>
-							Navigate
-						</Button>
-						{!isAttended && (
+					<Stack gap={8}>
+						<Group gap={8}>
 							<Button
-								leftSection={<IconCircleCheck size={16} />}
+								leftSection={<IconNavigation size={16} />}
+								variant="outline"
 								color="gold"
 								radius="xl"
 								style={{ flex: 1 }}
-								onClick={() => setAttendModalOpen(true)}>
-								Mark Attended
+								onClick={() => {
+									onNavigate(report);
+									onClose();
+								}}>
+								Navigate
 							</Button>
-						)}
-					</Group>
+							{!isAttended && (
+								<Button
+									leftSection={<IconCircleCheck size={16} />}
+									color="gold"
+									radius="xl"
+									style={{ flex: 1 }}
+									onClick={() => setAttendModalOpen(true)}>
+									Mark Attended
+								</Button>
+							)}
+						</Group>
+						<Button
+							component="a"
+							href={singleDestinationUrl([report.location.lat, report.location.lng])}
+							target="_blank"
+							rel="noopener noreferrer"
+							leftSection={<IconBrandGoogleMaps size={16} />}
+							variant="light"
+							color="gold"
+							radius="xl"
+							fullWidth>
+							Open in Google Maps
+						</Button>
+					</Stack>
 				</div>
 			</Drawer>
 
